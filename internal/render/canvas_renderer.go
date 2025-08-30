@@ -33,13 +33,26 @@ func NewCanvasRenderer() *CanvasRenderer {
 
 func (r *CanvasRenderer) Init(container interface{}) error {
 	doc := js.Global().Get("document")
+	window := js.Global().Get("window")
 	
 	// Create canvas element
 	r.canvas = doc.Call("createElement", "canvas")
-	r.canvas.Set("width", 800)
-	r.canvas.Set("height", 600)
-	r.width = 800
-	r.height = 600
+	
+	// Get actual window dimensions
+	width := window.Get("innerWidth").Float()
+	height := window.Get("innerHeight").Float()
+	
+	// Set canvas to full window size
+	r.canvas.Set("width", width)
+	r.canvas.Set("height", height)
+	r.width = width
+	r.height = height
+	
+	// Style to fill container
+	style := r.canvas.Get("style")
+	style.Set("width", "100%")
+	style.Set("height", "100%")
+	style.Set("display", "block")
 	
 	// Get 2D context
 	r.ctx = r.canvas.Call("getContext", "2d")
@@ -70,6 +83,14 @@ func (r *CanvasRenderer) Init(container interface{}) error {
 				}
 			}
 		}
+		return nil
+	}))
+	
+	// Setup window resize handler
+	window.Call("addEventListener", "resize", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		newWidth := window.Get("innerWidth").Float()
+		newHeight := window.Get("innerHeight").Float()
+		r.Resize(newWidth, newHeight)
 		return nil
 	}))
 	

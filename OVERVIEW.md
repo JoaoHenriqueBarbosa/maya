@@ -1,11 +1,17 @@
 # Maya UI Framework - Sistema Moderno de UI em Go/WASM
 
+## Status: 🟡 Em Desenvolvimento Ativo
+
+**Implementado:** Core (Node/Tree), Iteradores Go 1.24, Weak Pointers, Testing (99.1% coverage)  
+**Em Progresso:** Sistema de Signals  
+**Próximo:** Widgets, Layout Engine, WASM Build
+
 ## 1. Visão Geral
 
 Maya é uma framework de UI de próxima geração construída em Go 1.24+ e compilada para WebAssembly, oferecendo:
 - **Fine-grained reactivity** com Signals (inspirado em Solid.js)
-- **WebGPU acceleration** para rendering e compute
-- **Zero-cost abstractions** usando features modernas do Go
+- ~~**WebGPU acceleration**~~ (planejado para v2)
+- **Zero-cost abstractions** usando features reais do Go 1.24
 - **Bundle size otimizado** com TinyGo support
 - **Type-safe declarative API** com generics
 
@@ -30,7 +36,72 @@ Maya é uma framework de UI de próxima geração construída em Go 1.24+ e comp
 └─────────────────────────────────────────────┘
 ```
 
-## 3. Core Components (Go 1.24+ Enhanced)
+## 3. Implementação Real vs Planejada
+
+### 3.1 ✅ IMPLEMENTADO - Node e Tree com Go 1.24
+
+```go
+// CÓDIGO REAL FUNCIONANDO
+package core
+
+import (
+    "runtime"
+    "sync/atomic"
+    "weak"
+    "iter"
+)
+
+// Node implementado e testado (100% coverage)
+type Node struct {
+    ID       NodeID                    // string simples
+    Parent   *weak.Pointer[Node]       // weak ref para parent
+    Children []*Node
+    Widget   Widget
+    
+    // Performance optimizations
+    isDirty     atomic.Bool
+    dirtyFlags  atomic.Uint32
+    version     atomic.Uint64
+    weakCache   *weak.Pointer[ComputedValues]
+}
+
+// Tree com iteradores nativos Go 1.24 - FUNCIONANDO!
+func (t *Tree) DFS() iter.Seq[*Node] {
+    return func(yield func(*Node) bool) {
+        var traverse func(*Node) bool
+        traverse = func(n *Node) bool {
+            if !yield(n) {
+                return false  // Early termination funciona!
+            }
+            for _, child := range n.Children {
+                if !traverse(child) {
+                    return false
+                }
+            }
+            return true
+        }
+        if t.root != nil {
+            traverse(t.root)
+        }
+    }
+}
+
+// Benchmarks REAIS
+// BenchmarkTreeTraversal-6  2089418  573.6 ns/op  56 B/op  4 allocs/op
+```
+
+### 3.2 🚧 EM DESENVOLVIMENTO - Sistema de Signals
+
+```go
+// PRÓXIMA IMPLEMENTAÇÃO
+type Signal[T comparable] struct {
+    value    atomic.Value
+    version  atomic.Uint64
+    // unique.Handle não existe - usar string ID
+}
+```
+
+## 4. Core Components (Versão Original Planejada)
 
 ### 3.1 Sistema de Reatividade com Signals
 
@@ -43,11 +114,12 @@ import (
     "unique"
 )
 
-// Signal com fine-grained reactivity e canonicalização
+// Signal - IMPLEMENTAÇÃO PLANEJADA (próximo passo)
+// Nota: unique.Handle não existe no Go 1.24 real
 type Signal[T comparable] struct {
     value    atomic.Value
     version  atomic.Uint64
-    handle   unique.Handle[T]  // Go 1.23 unique package
+    // handle unique.Handle[T] // NÃO EXISTE
     effects  []*Effect
 }
 

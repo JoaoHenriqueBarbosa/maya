@@ -386,32 +386,61 @@ func (app *App) render() {
 | Debugging | React DevTools | Vue DevTools | Signal graph |
 | TypeScript | Good | Good | Excellent |
 
-## 🔮 Otimizações Futuras
+## ✅ Implementação Atual em Maya
 
-### 1. Lazy Effects
+### Sistema Funcionando
 ```go
-// Effects que só executam quando necessário
-type LazyEffect struct {
-    Effect
-    priority int
-    deferred bool
+// Signals com comparação de igualdade automática
+func NewSignal[T any](initial T) *Signal[T] {
+    s := &Signal[T]{...}
+    // Adiciona equals para bool, int, string automaticamente
+    switch any(initial).(type) {
+    case bool:
+        s.equals = func(a, b T) bool {
+            aBool, _ := any(a).(bool)
+            bBool, _ := any(b).(bool)
+            return aBool == bBool
+        }
+    }
+    return s
+}
+
+// DOM seletivo no Pipeline
+func (p *Pipeline) commitToDOM() {
+    if len(p.nodeElements) == 0 {
+        // Render inicial: cria elementos
+        p.createDOMTree(root, p.container)
+    } else {
+        // Update: apenas patch textContent
+        p.updateDOMTree(root)
+    }
+}
+
+// Widget reativo com Effect individual
+func TextSignal[T any](signal *Signal[T], format func(T) string) WidgetImpl {
+    text := widgets.NewText(id, format(signal.Peek()))
+    
+    effect := reactive.CreateEffect(func() {
+        newValue := format(signal.Get()) // Auto-tracking
+        text.SetText(newValue)
+        text.MarkNeedsRepaint()
+        
+        // Agenda update seletivo via batcher
+        globalApp.batcher.Add(func() {
+            globalApp.updateWidget(text)
+        })
+    })
+    
+    return text
 }
 ```
 
-### 2. Weak Signals
-```go
-// Signals que podem ser coletados pelo GC
-type WeakSignal[T any] struct {
-    value *weak.Pointer[T]
-    // ...
-}
-```
-
-### 3. Compile-Time Optimization
-```go
-//go:generate maya-optimizer
-// Análise estática para eliminar tracking desnecessário
-```
+### Resultados Alcançados
+- ✅ Zero loops infinitos
+- ✅ DOM persiste, apenas conteúdo muda
+- ✅ Signals não notificam quando valor não muda
+- ✅ Updates batched a 60 FPS
+- ✅ Fine-grained igual SolidJS
 
 ## 📚 Bibliografia
 

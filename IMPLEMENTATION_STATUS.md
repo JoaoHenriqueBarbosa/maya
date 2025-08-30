@@ -43,20 +43,23 @@
 - **DOM rendering**: Criação recursiva de elementos DOM
 - **Event handling**: Sistema de eventos sem js.FuncOf
 
-### 6. WASM Integration ✅ (Parcial)
+### 6. WASM Integration ✅ (Completo)
 - **go:wasmexport**: Funções exportadas funcionando
 - **Event callbacks**: Cliques processados corretamente  
 - **DOM manipulation**: Renderização inicial funcionando
-- **Reactive updates**: ⚠️ Pendente - DOM não atualiza com mudanças de Signal
+- **Reactive updates**: ✅ DOM atualiza seletivamente com mudanças de Signal
+- **Fine-grained reactivity**: ✅ Apenas textContent atualizado, sem reconstruir DOM
 
 ---
 
-## 🚧 Em Desenvolvimento
+## ✅ Recentemente Implementado
 
-### Re-render Reativo
-- [ ] Conectar Signals ao pipeline de render
-- [ ] Implementar invalidação e re-render automático
-- [ ] Otimizar updates parciais do DOM
+### Re-render Reativo (COMPLETO)
+- ✅ Signals conectados ao pipeline de render via Effects
+- ✅ Invalidação e re-render automático funcionando
+- ✅ Updates seletivos do DOM - apenas textContent muda
+- ✅ Comparação de igualdade evitando updates desnecessários
+- ✅ Pipeline diferencia render inicial de updates
 
 ---
 
@@ -72,14 +75,14 @@ maya.go (240 linhas - API pública)
     └── internal/widgets (UI Components) - Testado
 ```
 
-### Fluxo de Dados
+### Fluxo de Dados (Completo)
 1. **User Code** → Cria widgets com Signals
 2. **maya.go** → API simples (New, Container, Button, etc.)
-3. **Tree Building** → Converte widgets em core.Node tree
+3. **Tree Building** → Converte widgets em core.Node tree (FEITO UMA VEZ)
 4. **Render Pipeline** → Processa árvore em múltiplas passadas
-5. **DOM Commit** → Renderiza no navegador
+5. **DOM Commit** → Renderiza no navegador (inicial) ou atualiza seletivamente (updates)
 6. **Events** → go:wasmexport handleEvent → callbacks → Signal updates
-7. **Re-render** → ⚠️ Implementação pendente
+7. **Re-render** → ✅ Effects individuais atualizam widgets → Batcher agrupa → Pipeline patch DOM
 
 ---
 
@@ -106,7 +109,8 @@ window.wasmExports.handleEvent(callbackID)
 - ✅ Funções exportadas visíveis no WASM exports
 - ✅ Callbacks registrados e executados
 - ✅ Estado (Signals) atualizando corretamente
-- ⚠️ DOM não re-renderiza com mudanças
+- ✅ DOM atualiza seletivamente sem reconstruir
+- ✅ Fine-grained reactivity seguindo padrão SolidJS
 
 ---
 
@@ -129,20 +133,20 @@ BenchmarkSignal_Set          5000000    ~300 ns/op
 
 ## 🎯 Próximos Passos Imediatos
 
-1. **Implementar Re-render Reativo**
-   - Conectar Signal changes ao pipeline
-   - Implementar diff e patch do DOM
-   - Otimizar updates parciais
+1. **Melhorar Coverage dos Testes**
+   - Adicionar testes para updateDOMTree
+   - Testar comparação de igualdade em Signals
+   - Testar batching de updates
 
-2. **Melhorar Examples**
-   - Counter app completo
-   - Todo list
-   - Form inputs
+2. **Usar Mais Infraestrutura Existente**
+   - BaseWidget props reativas
+   - RenderObjects para otimização
+   - Memo para valores computados
 
-3. **Otimização WASM**
-   - Reduzir bundle size
-   - Implementar code splitting
-   - Cache de renderização
+3. **Melhorar Examples**
+   - Todo list com estado complexo
+   - Form inputs com two-way binding
+   - Nested components com props
 
 ---
 

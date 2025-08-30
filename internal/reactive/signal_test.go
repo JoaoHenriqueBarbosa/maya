@@ -51,11 +51,20 @@ func TestSignal_BasicOperations(t *testing.T) {
 			t.Error("Version should increment on set")
 		}
 		
-		sig.Set(2) // Same value with no equality checker
+		// Now int has automatic equality, so same value won't increment version
+		sig.Set(2) 
 		v3 := sig.Version()
 		
-		if v3 <= v2 {
-			t.Error("Version should increment even for same value without equality")
+		if v3 != v2 {
+			t.Error("Version should NOT increment for same value with equality")
+		}
+		
+		// Test with different value
+		sig.Set(3)
+		v4 := sig.Version()
+		
+		if v4 <= v3 {
+			t.Error("Version should increment for different value")
 		}
 	})
 }
@@ -91,14 +100,16 @@ func TestSignal_Equality(t *testing.T) {
 	
 	t.Run("without_equality_checker", func(t *testing.T) {
 		updateCount := 0
-		sig := NewSignal(42)
+		// Use a struct type that doesn't have automatic equality
+		type CustomStruct struct{ Value int }
+		sig := NewSignal(CustomStruct{Value: 42})
 		
-		sig.Subscribe(func(v int) {
+		sig.Subscribe(func(v CustomStruct) {
 			updateCount++
 		})
 		
 		// Set same value - should trigger without equality
-		sig.Set(42)
+		sig.Set(CustomStruct{Value: 42})
 		if updateCount != 2 {
 			t.Error("Without equality, same value should trigger update")
 		}

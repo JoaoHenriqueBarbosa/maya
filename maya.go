@@ -212,6 +212,63 @@ func Container(children ...widgets.WidgetImpl) widgets.WidgetImpl {
 	return c
 }
 
+// StyledContainer creates a container with styling
+func StyledContainer(style ContainerStyle, children ...widgets.WidgetImpl) widgets.WidgetImpl {
+	var child widgets.WidgetImpl
+	if len(children) == 0 {
+		child = nil
+	} else if len(children) == 1 {
+		child = children[0]
+	} else {
+		child = Column(children...)
+	}
+
+	c := widgets.NewContainer("styled-container")
+	if child != nil {
+		c.SetChild(child)
+	}
+	
+	// Apply styling
+	if style.Background != nil {
+		c.SetColor(*style.Background)
+	}
+	if style.BorderColor != nil && style.BorderWidth > 0 {
+		c.SetBorder(*style.BorderColor, style.BorderWidth, style.BorderRadius)
+	}
+	if style.Padding != nil {
+		c.SetPadding(*style.Padding)
+	}
+	if style.Shadow != nil {
+		c.SetBoxShadow(style.Shadow)
+	}
+	
+	return c
+}
+
+// ContainerStyle defines styling options for containers
+type ContainerStyle struct {
+	Background   *core.Color
+	BorderColor  *core.Color
+	BorderWidth  float64
+	BorderRadius float64
+	Padding      *widgets.EdgeInsets
+	Shadow       *widgets.BoxShadow
+}
+
+// Predefined colors for convenience
+var (
+	ColorWhite   = &core.Color{R: 255, G: 255, B: 255, A: 255}
+	ColorBlack   = &core.Color{R: 0, G: 0, B: 0, A: 255}
+	ColorRed     = &core.Color{R: 255, G: 0, B: 0, A: 255}
+	ColorGreen   = &core.Color{R: 0, G: 255, B: 0, A: 255}
+	ColorBlue    = &core.Color{R: 0, G: 0, B: 255, A: 255}
+	ColorGray    = &core.Color{R: 128, G: 128, B: 128, A: 255}
+	ColorLightGray = &core.Color{R: 200, G: 200, B: 200, A: 255}
+)
+
+// Type aliases for convenience
+type Offset = core.Offset
+
 // Column creates a vertical layout
 func Column(children ...widgets.WidgetImpl) widgets.WidgetImpl {
 	return widgets.NewColumn("column", children...)
@@ -256,6 +313,16 @@ func Signal[T comparable](initial T) *reactive.Signal[T] {
 	return reactive.NewSignal(initial)
 }
 
+// Memo creates a memoized computed value
+func Memo[T any](compute func() T) *reactive.Memo[T] {
+	return reactive.NewMemo(compute)
+}
+
+// Computed creates a computed value with automatic dependency tracking
+func Computed[T any](compute func() T) *reactive.Computed[T] {
+	return reactive.NewComputed(compute)
+}
+
 // TextSignal creates a truly reactive text widget
 func TextSignal[T any](signal *reactive.Signal[T], format func(T) string) widgets.WidgetImpl {
 	id := fmt.Sprintf("reactive-text-%p", signal)
@@ -286,6 +353,36 @@ func TextSignal[T any](signal *reactive.Signal[T], format func(T) string) widget
 	})
 	
 	println("[TEXT-SIGNAL] Effect created with ID:", effect)
+	
+	return text
+}
+
+// TextMemo creates a reactive text widget from a computed value
+func TextMemo[T any](memo *reactive.Memo[T], format func(T) string) widgets.WidgetImpl {
+	id := fmt.Sprintf("reactive-memo-%p", memo)
+	
+	// Create text widget with initial value
+	initialValue := format(memo.Peek())
+	text := widgets.NewText(id, initialValue)
+	println("[TEXT-MEMO] Created widget with initial value:", initialValue)
+	
+	// Create effect that updates when memo changes
+	effect := reactive.CreateEffect(func() {
+		newValue := format(memo.Get())
+		println("[TEXT-MEMO] Memo updated widget text to:", newValue)
+		text.SetText(newValue)
+		text.MarkNeedsRepaint()
+		
+		// Schedule selective DOM update
+		if globalApp != nil && globalApp.batcher != nil {
+			globalApp.batcher.Add(func() {
+				println("[TEXT-MEMO] Batched DOM update for:", id)
+				globalApp.updateWidget(text)
+			})
+		}
+	})
+	
+	println("[TEXT-MEMO] Effect created with ID:", effect)
 	
 	return text
 }

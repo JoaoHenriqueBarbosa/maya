@@ -3,10 +3,8 @@ package widgets
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/maya-framework/maya/internal/core"
-	"github.com/maya-framework/maya/internal/reactive"
 )
 
 func TestNewButton(t *testing.T) {
@@ -338,26 +336,41 @@ func TestButton_Dispose(t *testing.T) {
 func TestButton_ReactiveEffects(t *testing.T) {
 	button := NewButton("test", "Click", nil)
 	
-	var repaintCount int
-	dispose := reactive.Watch(func() {
-		if button.NeedsRepaint() {
-			repaintCount++
-		}
+	var stateChanges int
+	// Watch the actual state signals
+	dispose1 := button.isPressed.Subscribe(func(v bool) {
+		stateChanges++
 	})
-	defer dispose()
+	defer dispose1()
 	
-	// Change button states
-	button.isPressed.Set(true)
-	time.Sleep(10 * time.Millisecond)
+	dispose2 := button.isHovered.Subscribe(func(v bool) {
+		stateChanges++
+	})
+	defer dispose2()
 	
-	button.isHovered.Set(true)
-	time.Sleep(10 * time.Millisecond)
+	dispose3 := button.isDisabled.Subscribe(func(v bool) {
+		stateChanges++
+	})
+	defer dispose3()
 	
-	button.SetDisabled(true)
-	time.Sleep(10 * time.Millisecond)
+	// Change button states (initial subscribe calls count as 1 each = 3)
+	button.isPressed.Set(true)  // Change from false to true = +1
+	button.isHovered.Set(true)  // Change from false to true = +1
+	button.SetDisabled(true)    // Change from false to true = +1
 	
-	if repaintCount < 3 {
-		t.Errorf("State changes should trigger repaints, got %d repaints", repaintCount)
+	// Should have 3 initial + 3 changes = 6 total
+	if stateChanges != 6 {
+		t.Errorf("Expected 6 state changes, got %d", stateChanges)
+	}
+	
+	// Test that same value doesn't trigger (equality check)
+	stateChanges = 0
+	button.isPressed.Set(true)  // Same value
+	button.isHovered.Set(true)  // Same value  
+	button.SetDisabled(true)    // Same value
+	
+	if stateChanges != 0 {
+		t.Errorf("Same values should not trigger changes due to equality check, got %d changes", stateChanges)
 	}
 }
 

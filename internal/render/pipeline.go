@@ -414,10 +414,60 @@ func (p *Pipeline) updateDOMTree(node *core.Node) {
 	}
 }
 
-// applyThemeStyles applies visual styles based on widget type
+// applyThemeStyles applies visual styles based on widget type and RenderObject
 func (p *Pipeline) applyThemeStyles(elem js.Value, widget widgets.WidgetImpl) {
 	style := elem.Get("style")
+	
+	// Try to get render object for advanced styling
+	if builder, ok := widget.(interface{ Build(context.Context) widgets.RenderObject }); ok {
+		renderObj := builder.Build(context.Background())
+		
+		// Check for decorated box
+		if decorated, ok := renderObj.(*widgets.RenderDecoratedBox); ok {
+			decoration := decorated.Decoration
+			
+			// Apply background
+			if decoration.Color.A > 0 {
+				style.Set("backgroundColor", fmt.Sprintf("rgba(%d,%d,%d,%f)", 
+					decoration.Color.R, 
+					decoration.Color.G, 
+					decoration.Color.B,
+					float64(decoration.Color.A)/255.0))
+			}
+			
+			// Apply border
+			if decoration.BorderWidth > 0 && decoration.BorderColor.A > 0 {
+				style.Set("borderWidth", fmt.Sprintf("%fpx", decoration.BorderWidth))
+				style.Set("borderStyle", "solid")
+				style.Set("borderColor", fmt.Sprintf("rgba(%d,%d,%d,%f)",
+					decoration.BorderColor.R,
+					decoration.BorderColor.G,
+					decoration.BorderColor.B,
+					float64(decoration.BorderColor.A)/255.0))
+				
+				if decoration.BorderRadius > 0 {
+					style.Set("borderRadius", fmt.Sprintf("%fpx", decoration.BorderRadius))
+				}
+			}
+			
+			// Apply box shadow
+			if decoration.BoxShadow != nil {
+				shadow := decoration.BoxShadow
+				style.Set("boxShadow", fmt.Sprintf("%fpx %fpx %fpx rgba(%d,%d,%d,%f)",
+					shadow.Offset.X,
+					shadow.Offset.Y,
+					shadow.BlurRadius,
+					shadow.Color.R,
+					shadow.Color.G,
+					shadow.Color.B,
+					float64(shadow.Color.A)/255.0))
+			}
+			
+			return // Decorated styles applied, skip default theme
+		}
+	}
 
+	// Default theme styles based on widget type
 	switch widget.(type) {
 	case *widgets.Text:
 		style.Set("color", p.theme.Text)

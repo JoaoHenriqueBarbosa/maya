@@ -180,6 +180,31 @@ func (c *Container) SetBoxShadow(shadow *BoxShadow) {
 
 // Build creates the render object
 func (c *Container) Build(ctx context.Context) RenderObject {
+	// Check if we have decoration
+	bg := c.color.Get()
+	borderColor := c.borderColor.Get()
+	borderWidth := c.borderWidth.Get()
+	
+	hasDecoration := bg.A > 0 || (borderColor.A > 0 && borderWidth > 0) || c.boxShadow != nil
+	
+	if hasDecoration {
+		// Return decorated box with styling
+		decorated := &RenderDecoratedBox{
+			Decoration: BoxDecoration{
+				Color:        bg,
+				BorderColor:  borderColor,
+				BorderWidth:  borderWidth,
+				BorderRadius: c.borderRadius.Get(),
+				BoxShadow:    c.boxShadow.Get(),
+			},
+		}
+		// Set the child as the actual render content
+		decorated.Child = &RenderBox{
+			Size: c.cachedSize,
+		}
+		return decorated
+	}
+	
 	// Default implementation returns RenderBox
 	return &RenderBox{
 		Size: c.cachedSize,

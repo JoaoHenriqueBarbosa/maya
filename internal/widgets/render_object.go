@@ -140,6 +140,7 @@ type BoxDecoration struct {
 	BorderRadius float64
 	BorderColor  core.Color
 	BorderWidth  float64
+	BoxShadow    *BoxShadow  // Optional shadow
 }
 
 func (r *RenderDecoratedBox) Layout(constraints core.Constraints) Size {

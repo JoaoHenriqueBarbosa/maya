@@ -102,8 +102,6 @@ func (c *Container) setupContainerEffects() {
 // SetChild sets the container's child widget
 func (c *Container) SetChild(child WidgetImpl) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	
 	// Remove old child
 	if c.child != nil {
 		if setter, ok := c.child.(interface{ SetParent(WidgetImpl) }); ok {
@@ -122,7 +120,9 @@ func (c *Container) SetChild(child WidgetImpl) {
 	} else {
 		c.children = []WidgetImpl{}
 	}
+	c.mu.Unlock()
 	
+	// Call these after unlocking to avoid deadlock
 	c.MarkNeedsLayout()
 	c.MarkNeedsRepaint()
 }
@@ -180,13 +180,9 @@ func (c *Container) SetBoxShadow(shadow *BoxShadow) {
 
 // Build creates the render object
 func (c *Container) Build(ctx context.Context) RenderObject {
-	return &RenderDecoratedBox{
-		Decoration: BoxDecoration{
-			Color:        c.color.Get(),
-			BorderRadius: c.borderRadius.Get(),
-			BorderColor:  c.borderColor.Get(),
-			BorderWidth:  c.borderWidth.Get(),
-		},
+	// Default implementation returns RenderBox
+	return &RenderBox{
+		Size: c.cachedSize,
 	}
 }
 
@@ -237,6 +233,16 @@ func (c *Container) Layout(constraints core.Constraints) (width, height float64)
 		
 		if coreWidget, ok := c.child.(core.Widget); ok {
 			childWidth, childHeight = coreWidget.Layout(childConstraints)
+		}
+	} else {
+		// If no child, use maximum available space
+		childWidth = innerConstraints.MaxWidth - padding.Left - padding.Right
+		childHeight = innerConstraints.MaxHeight - padding.Top - padding.Bottom
+		if childWidth < 0 {
+			childWidth = 0
+		}
+		if childHeight < 0 {
+			childHeight = 0
 		}
 	}
 	

@@ -4,6 +4,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"weak"
+	"github.com/maya-framework/maya/internal/logger"
 )
 
 // Memo represents a lazily computed value that depends on signals
@@ -28,7 +29,7 @@ type Memo[T any] struct {
 
 // NewMemo creates a new memoized computation
 func NewMemo[T any](compute func() T) *Memo[T] {
-	println("[MEMO-NEW] Creating new memo")
+	logger.Trace("MEMO", "Creating new memo")
 	m := &Memo[T]{
 		compute:   compute,
 		observers: make(map[uint64]*Effect),
@@ -39,16 +40,16 @@ func NewMemo[T any](compute func() T) *Memo[T] {
 	
 	// Do initial computation to capture dependencies
 	// This will set up the effect that watches the signals
-	println("[MEMO-NEW] Doing initial computation")
+	logger.Trace("MEMO", "Doing initial computation")
 	defer func() {
 		if r := recover(); r != nil {
-			println("[MEMO-NEW] Panic during initial computation:", r)
+			logger.Error("MEMO", "Panic during initial computation: %v", r)
 		}
 	}()
 	
 	// Force initial computation to set up dependencies
 	m.recompute()
-	println("[MEMO-NEW] Initial computation complete")
+	logger.Trace("MEMO", "Initial computation complete")
 	
 	return m
 }
@@ -67,7 +68,7 @@ func (m *Memo[T]) Get() T {
 		current.dependencies[m] = m.version.Load()
 		current.depmu.Unlock()
 		
-		println("[MEMO] Registered observer effect", current.id)
+		logger.Trace("MEMO", "Registered observer effect %d", current.id)
 	}
 	
 	// Fast path: check if cached and not stale
@@ -75,12 +76,12 @@ func (m *Memo[T]) Get() T {
 		m.mu.RLock()
 		value := m.cached
 		m.mu.RUnlock()
-		println("[MEMO] Returning cached value")
+		logger.Trace("MEMO", "Returning cached value")
 		return value
 	}
 	
 	// Slow path: recompute
-	println("[MEMO] Recomputing stale value")
+	logger.Trace("MEMO", "Recomputing stale value")
 	return m.recompute()
 }
 
@@ -117,32 +118,33 @@ func (m *Memo[T]) recompute() T {
 		m.effect.Dispose()
 	}
 	
-	// We need a flag to know if this is the first run
-	isFirstRun := true
-	
-	// Create an effect that both computes and responds to changes
+	// The effect just marks the memo as stale when dependencies change
+	// We don't recompute here - that happens lazily in Get()
 	memoEffect := CreateEffectWithOptions(func() {
-		if isFirstRun {
-			// First run: compute the value
-			println("[MEMO-EFFECT] First run, computing value")
-			value = m.compute()
-			isFirstRun = false
-		} else {
-			// Subsequent runs: mark as stale and notify
-			println("[MEMO-EFFECT] Dependencies changed, marking as stale")
-			m.stale.Store(true)
-			m.notifyObservers()
-		}
+		logger.Trace("MEMO", "Dependencies changed, marking memo as stale")
+		m.stale.Store(true)
+		m.notifyObservers()
 	}, EffectOptions{
-		Immediate: true, // Run immediately to establish dependencies
+		Immediate: false, // Don't run immediately - we'll set up deps manually
 		Defer: false,
 	})
+	
+	// Now compute the value while the effect is active in the stack
+	// This allows the compute function to register dependencies
+	pushEffect(memoEffect)
+	value = m.compute()
+	popEffect()
+	
+	logger.Trace("MEMO", "Computed value, effect has %d dependencies", len(memoEffect.dependencies))
 	
 	// Store the effect for future cleanup
 	m.effect = memoEffect
 	
+	// Mark the effect as active so it can respond to changes
+	memoEffect.active.Store(true)
+	
 	// The effect was already registered with signals during compute()
-	println("[MEMO] Effect registered with", len(memoEffect.dependencies), "dependencies")
+	logger.Trace("MEMO", "Effect registered with %d dependencies", len(memoEffect.dependencies))
 	
 	// Update cached value
 	m.mu.Lock()

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"syscall/js"
 	"github.com/maya-framework/maya/internal/core"
+	"github.com/maya-framework/maya/internal/logger"
 )
 
 // DOMRenderer renders to HTML DOM
@@ -145,12 +146,12 @@ func (r *DOMRenderer) ApplyUpdates(updates []PaintCommand, allCommands []PaintCo
 	for _, cmd := range updates {
 		if elem, exists := r.elements[cmd.ID]; exists {
 			if cmd.Type == UpdateText {
-				println("[DOM-UPDATE] Updating text for", cmd.ID, "to", cmd.Text)
+				logger.Trace(logger.TagDOM, "Updating text for %s to %s", cmd.ID, cmd.Text)
 				elem.Set("textContent", cmd.Text)
 			}
 			// Add more update types as needed
 		} else {
-			println("[DOM-UPDATE] Element not found for ID:", cmd.ID)
+			logger.Debug(logger.TagDOM, "Element not found for ID: %s", cmd.ID)
 		}
 	}
 	return true // Handled successfully

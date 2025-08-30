@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"syscall/js"
 	"github.com/maya-framework/maya/internal/core"
+	"github.com/maya-framework/maya/internal/logger"
 )
 
 // CanvasRenderer renders to HTML5 Canvas
@@ -215,7 +216,7 @@ func (r *CanvasRenderer) EndFrame() {
 
 func (r *CanvasRenderer) ApplyUpdates(updates []PaintCommand, allCommands []PaintCommand) bool {
 	// Canvas can't do selective updates efficiently, request full redraw
-	println("[CANVAS-UPDATE] Updates detected, requesting full redraw")
+	logger.Trace(logger.TagCanvas, "Updates detected, requesting full redraw")
 	return false // Tell pipeline we need full redraw
 }
 

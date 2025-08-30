@@ -9,6 +9,7 @@ import (
 	"syscall/js"
 
 	"github.com/maya-framework/maya/internal/core"
+	"github.com/maya-framework/maya/internal/logger"
 	"github.com/maya-framework/maya/internal/reactive"
 	"github.com/maya-framework/maya/internal/render"
 	"github.com/maya-framework/maya/internal/widgets"
@@ -94,7 +95,7 @@ func (app *App) Run() {
 			panic(fmt.Sprintf("Failed to initialize renderer: %v", err))
 		}
 		
-		println("[MAYA] Using renderer:", renderer.Name())
+		logger.Info(logger.TagMaya, "Using renderer: %s", renderer.Name())
 
 		// Create pipeline with our REAL components and selected renderer
 		app.pipeline = render.NewPipeline(app.tree, renderer, &render.Theme{
@@ -117,7 +118,7 @@ func (app *App) Run() {
 
 // updateWidget updates a specific widget in the DOM without recreating everything
 func (app *App) updateWidget(widget widgets.WidgetImpl) {
-	println("[UPDATE-WIDGET] Updating specific widget:", widget.ID())
+	logger.Trace(logger.TagWidget, "Updating specific widget: %s", widget.ID())
 	
 	// Find the node in the tree
 	var targetNode *core.Node
@@ -141,18 +142,18 @@ func (app *App) updateWidget(widget widgets.WidgetImpl) {
 
 // render executes the pipeline with current tree
 func (app *App) render() {
-	println("[RENDER] Starting pipeline execution...")
+	logger.Trace(logger.TagRender, "Starting pipeline execution...")
 	if err := app.pipeline.Execute(app.ctx); err != nil {
-		println("[RENDER] Error:", err.Error())
+		logger.Error(logger.TagRender, "Error: %s", err.Error())
 	} else {
-		println("[RENDER] Pipeline execution complete")
+		logger.Trace(logger.TagRender, "Pipeline execution complete")
 	}
 }
 
 
 // widgetToNode converts a widget to a core.Node recursively
 func (app *App) widgetToNode(widget widgets.WidgetImpl) *core.Node {
-	println("[WIDGET->NODE] Converting:", widget.ID())
+	logger.Trace(logger.TagWidget, "Converting widget to node: %s", widget.ID())
 	node := core.NewNode(widget.ID(), widget)
 
 	// Handle different widget types
@@ -181,7 +182,7 @@ func (app *App) widgetToNode(widget widgets.WidgetImpl) *core.Node {
 
 // setupReactiveEffect creates the widget tree ONCE and lets widgets handle their own updates
 func (app *App) setupReactiveEffect() {
-	println("[REACTIVE] Building widget tree ONCE...")
+	logger.Trace(logger.TagReactive, "Building widget tree ONCE...")
 	
 	// Build tree ONCE - widgets have their own reactive effects
 	rootWidget := app.root()
@@ -192,7 +193,7 @@ func (app *App) setupReactiveEffect() {
 	app.render()
 	
 	// Widgets will update themselves via their own effects
-	println("[REACTIVE] Setup complete - using widget-level reactivity")
+	logger.Trace(logger.TagReactive, "Setup complete - using widget-level reactivity")
 }
 
 // setupViewport configures the viewport
@@ -351,14 +352,14 @@ func TextSignal[T any](signal *reactive.Signal[T], format func(T) string) widget
 	// Create text widget with initial value (without tracking)
 	initialValue := format(signal.Peek())
 	text := widgets.NewText(id, initialValue)
-	println("[TEXT-SIGNAL] Created widget with initial value:", initialValue)
+	logger.Trace(logger.TagSignal, "Created TEXT widget with initial value: %s", initialValue)
 	
 	// Create effect that updates ONLY this widget's text
 	// This effect will track the signal dependency on first run
 	effect := reactive.CreateEffect(func() {
 		// This Get() will register this effect as an observer
 		newValue := format(signal.Get())
-		println("[TEXT-SIGNAL] Effect updating widget text to:", newValue)
+		logger.Trace(logger.TagSignal, "TEXT effect updating widget text to: %s", newValue)
 		text.SetText(newValue)
 		
 		// Mark this specific widget for repaint
@@ -367,13 +368,13 @@ func TextSignal[T any](signal *reactive.Signal[T], format func(T) string) widget
 		// Schedule selective DOM update
 		if globalApp != nil && globalApp.batcher != nil {
 			globalApp.batcher.Add(func() {
-				println("[TEXT-SIGNAL] Batched DOM update for:", id)
+				logger.Trace(logger.TagSignal, "Batched TEXT DOM update for: %s", id)
 				globalApp.updateWidget(text)
 			})
 		}
 	})
 	
-	println("[TEXT-SIGNAL] Effect created with ID:", effect)
+	logger.Trace(logger.TagSignal, "TEXT signal effect created with ID: %v", effect)
 	
 	return text
 }
@@ -385,25 +386,25 @@ func TextMemo[T any](memo *reactive.Memo[T], format func(T) string) widgets.Widg
 	// Create text widget with initial value
 	initialValue := format(memo.Peek())
 	text := widgets.NewText(id, initialValue)
-	println("[TEXT-MEMO] Created widget with initial value:", initialValue)
+	logger.Trace(logger.TagMemo, "Created TEXT widget with initial value: %s", initialValue)
 	
 	// Create effect that updates when memo changes
 	effect := reactive.CreateEffect(func() {
 		newValue := format(memo.Get())
-		println("[TEXT-MEMO] Memo updated widget text to:", newValue)
+		logger.Trace(logger.TagMemo, "TEXT memo updated widget text to: %s", newValue)
 		text.SetText(newValue)
 		text.MarkNeedsRepaint()
 		
 		// Schedule selective DOM update
 		if globalApp != nil && globalApp.batcher != nil {
 			globalApp.batcher.Add(func() {
-				println("[TEXT-MEMO] Batched DOM update for:", id)
+				logger.Trace(logger.TagMemo, "Batched TEXT DOM update for: %s", id)
 				globalApp.updateWidget(text)
 			})
 		}
 	})
 	
-	println("[TEXT-MEMO] Effect created with ID:", effect)
+	logger.Trace(logger.TagMemo, "TEXT memo effect created with ID: %v", effect)
 	
 	return text
 }

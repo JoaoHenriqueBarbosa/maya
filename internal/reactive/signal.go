@@ -1,9 +1,9 @@
 package reactive
 
 import (
-	"fmt"
 	"sync"
 	"sync/atomic"
+	"github.com/maya-framework/maya/internal/logger"
 )
 
 // Signal represents a reactive value that can be observed for changes
@@ -64,12 +64,12 @@ func NewSignalWithEquals[T any](initial T, equals func(a, b T) bool) *Signal[T] 
 func (s *Signal[T]) Get() T {
 	// Track this signal as a dependency of the current effect
 	if current := getCurrentEffect(); current != nil {
-		println("[SIGNAL] Tracking read by effect ID:", current.id)
+		logger.Trace("SIGNAL", "Tracking read by effect ID: %d", current.id)
 		s.addObserver(current)
 		current.addDependency(s)
-		println("[SIGNAL] Added effect", current.id, "as observer, now have", len(s.observers), "observers")
+		logger.Trace("SIGNAL", "Added effect %d as observer, now have %d observers", current.id, len(s.observers))
 	} else {
-		println("[SIGNAL] No current effect to track")
+		logger.Trace("SIGNAL", "No current effect to track")
 	}
 	
 	s.mu.RLock()
@@ -99,16 +99,16 @@ func (s *Signal[T]) Set(value T) {
 	s.version.Add(1)
 	s.mu.Unlock()
 	
-	println("[SIGNAL] Value changed from", fmt.Sprint(oldValue), "to", fmt.Sprint(value))
+	logger.Trace("SIGNAL", "Value changed from %v to %v", oldValue, value)
 	
 	// Check if we're in a batch
 	if isInBatch() {
-		println("[SIGNAL] In batch, queuing notification")
+		logger.Trace("SIGNAL", "In batch, queuing notification")
 		addPendingSignal(s)
 		return
 	}
 	
-	println("[SIGNAL] Notifying", len(s.getObservers()), "observers")
+	logger.Trace("SIGNAL", "Notifying %d observers", len(s.getObservers()))
 	s.notify()
 }
 

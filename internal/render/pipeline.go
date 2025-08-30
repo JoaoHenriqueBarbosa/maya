@@ -9,6 +9,7 @@ import (
 
 	"github.com/maya-framework/maya/internal/core"
 	"github.com/maya-framework/maya/internal/graph"
+	"github.com/maya-framework/maya/internal/logger"
 	"github.com/maya-framework/maya/internal/widgets"
 	"github.com/maya-framework/maya/internal/workflow"
 )
@@ -127,7 +128,7 @@ func (p *Pipeline) setupStages() {
 
 // Execute runs the rendering pipeline
 func (p *Pipeline) Execute(ctx context.Context) error {
-	println("[PIPELINE] Starting execution...")
+	logger.Trace("PIPELINE", "Starting execution...")
 	
 	// Get topological order from dependency graph
 	order, err := p.dependencies.TopologicalSort()
@@ -144,7 +145,7 @@ func (p *Pipeline) Execute(ctx context.Context) error {
 	for _, nodeID := range order {
 		stageID := string(nodeID)
 		if stage, exists := p.engine.GetStage(stageID); exists {
-			println("[PIPELINE] Executing stage:", stageID)
+			logger.Trace("PIPELINE", "Executing stage: %s", stageID)
 			stageCtx.Stage = stage
 			if err := stage.Execute(ctx, stageCtx); err != nil {
 				return fmt.Errorf("stage %s failed: %w", stageID, err)
@@ -277,7 +278,7 @@ func (p *Pipeline) assignNodePosition(node *core.Node) {
 
 // commitToDOM renders the tree using the abstract renderer
 func (p *Pipeline) commitToDOM() {
-	println("[RENDER-COMMIT] Rendering with:", p.renderer.Name())
+	logger.Debug("RENDER", "Rendering with: %s", p.renderer.Name())
 	
 	if root := p.tree.GetRoot(); root != nil {
 		// Convert tree to paint commands
@@ -329,7 +330,7 @@ func (p *Pipeline) findUpdates(newCommands []PaintCommand) []PaintCommand {
 		if prevCmd, exists := prevMap[newCmd.ID]; exists {
 			// Check if text changed
 			if newCmd.Type == PaintText && newCmd.Text != prevCmd.Text {
-				println("[UPDATE] Text changed for", newCmd.ID, "from", prevCmd.Text, "to", newCmd.Text)
+				logger.Trace("UPDATE", "Text changed for %s from %s to %s", newCmd.ID, prevCmd.Text, newCmd.Text)
 				newCmd.Type = UpdateText // Mark as update
 				updates = append(updates, newCmd)
 			}

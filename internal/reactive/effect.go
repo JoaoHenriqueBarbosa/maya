@@ -3,6 +3,7 @@ package reactive
 import (
 	"sync"
 	"sync/atomic"
+	"github.com/maya-framework/maya/internal/logger"
 )
 
 var (
@@ -69,15 +70,15 @@ func CreateEffectWithOptions(fn func(), opts EffectOptions) *Effect {
 // run executes the effect function
 func (e *Effect) run() {
 	if !e.active.Load() {
-		println("[EFFECT] Effect", e.id, "is not active, skipping run")
+		logger.Trace("EFFECT", "Effect %d is not active, skipping run", e.id)
 		return
 	}
 	
-	println("[EFFECT] Running effect ID:", e.id)
+	logger.Trace("EFFECT", "Running effect ID: %d", e.id)
 	
 	// Prevent recursive runs
 	if !e.running.CompareAndSwap(false, true) {
-		println("[EFFECT] Already running, skipping")
+		logger.Trace("EFFECT", "Already running, skipping")
 		return
 	}
 	defer e.running.Store(false)
@@ -88,24 +89,24 @@ func (e *Effect) run() {
 	// Clear old dependencies
 	oldDeps := len(e.dependencies)
 	e.clearDependencies()
-	println("[EFFECT] Cleared", oldDeps, "old dependencies")
+	logger.Trace("EFFECT", "Cleared %d old dependencies", oldDeps)
 	
 	// Push to effect stack for dependency tracking
 	pushEffect(e)
-	println("[EFFECT] Pushed effect", e.id, "to stack")
+	logger.Trace("EFFECT", "Pushed effect %d to stack", e.id)
 	defer func() {
 		popEffect()
-		println("[EFFECT] Popped effect", e.id, "from stack")
+		logger.Trace("EFFECT", "Popped effect %d from stack", e.id)
 	}()
 	
 	// Run cleanups from previous run
 	e.runCleanups()
 	
 	// Execute the effect function
-	println("[EFFECT] About to execute fn for effect", e.id)
+	logger.Trace("EFFECT", "About to execute fn for effect %d", e.id)
 	e.fn()
 	
-	println("[EFFECT] Effect", e.id, "completed, now tracking", len(e.dependencies), "dependencies")
+	logger.Trace("EFFECT", "Effect %d completed, now tracking %d dependencies", e.id, len(e.dependencies))
 }
 
 // invalidate marks the effect as needing re-execution

@@ -6,37 +6,38 @@ package main
 import (
 	"fmt"
 	"github.com/maya-framework/maya"
+	"github.com/maya-framework/maya/internal/logger"
 	"github.com/maya-framework/maya/internal/widgets"
 )
 
 func main() {
-	fmt.Println("========== Maya App Starting! ==========")
+	logger.Info("APP", "Maya App Starting")
 	
 	// Create reactive state
 	counter := maya.Signal(0)
 	message := maya.Signal("Click the buttons!")
-	fmt.Println("Signals created")
+	logger.Debug("APP", "Signals created")
 	
 	// Memo example - computed values that cache
 	doubled := maya.Memo(func() int {
-		fmt.Println("[MEMO] Computing doubled value...")
+		logger.Trace("MEMO", "Computing doubled value...")
 		value := counter.Get()
-		fmt.Printf("[MEMO] Counter value is %d, doubled is %d\n", value, value*2)
+		logger.Trace("MEMO", "Counter value is %d, doubled is %d", value, value*2)
 		return value * 2
 	})
-	fmt.Println("Created doubled memo:", doubled)
+	logger.Debug("APP", "Created doubled memo")
 	
 	squared := maya.Memo(func() int {
-		fmt.Println("[MEMO] Computing squared value...")
+		logger.Trace("MEMO", "Computing squared value...")
 		value := counter.Get()
-		fmt.Printf("[MEMO] Counter value is %d, squared is %d\n", value, value*value)
+		logger.Trace("MEMO", "Counter value is %d, squared is %d", value, value*value)
 		return value * value
 	})
-	fmt.Println("Created squared memo:", squared)
+	logger.Debug("APP", "Created squared memo")
 	
 	// Computed example - derived state
 	analysis := maya.Computed(func() string {
-		fmt.Println("[COMPUTED] Analyzing counter...")
+		logger.Trace("COMPUTED", "Analyzing counter...")
 		value := counter.Get()
 		if value < 0 {
 			return "Negative"
@@ -81,24 +82,24 @@ func main() {
 					// Buttons
 					maya.Row(
 						maya.Button("Increment", func() {
-							fmt.Println("Increment button clicked!")
+							logger.Debug("UI", "Increment button clicked")
 							counter.Set(counter.Get() + 1)
 							message.Set(fmt.Sprintf("Incremented to %d", counter.Get()))
-							fmt.Printf("Counter is now: %d\n", counter.Get())
+							logger.Debug("UI", "Counter is now: %d", counter.Get())
 						}),
 						
 						maya.Button("Decrement", func() {
-							fmt.Println("Decrement button clicked!")
+							logger.Debug("UI", "Decrement button clicked")
 							counter.Set(counter.Get() - 1)
 							message.Set(fmt.Sprintf("Decremented to %d", counter.Get()))
-							fmt.Printf("Counter is now: %d\n", counter.Get())
+							logger.Debug("UI", "Counter is now: %d", counter.Get())
 						}),
 						
 						maya.Button("Reset", func() {
-							fmt.Println("Reset button clicked!")
+							logger.Debug("UI", "Reset button clicked")
 							counter.Set(0)
 							message.Set("Counter reset!")
-							fmt.Printf("Counter is now: %d\n", counter.Get())
+							logger.Debug("UI", "Counter is now: %d", counter.Get())
 						}),
 					),
 					

@@ -18,37 +18,29 @@ func main() {
 	message := maya.Signal("Click the buttons!")
 	logger.Debug("APP", "Signals created")
 	
-	// Memo example - computed values that cache
-	doubled := maya.Memo(func() int {
-		logger.Trace("MEMO", "Computing doubled value...")
-		value := counter.Get()
-		logger.Trace("MEMO", "Counter value is %d, doubled is %d", value, value*2)
-		return value * 2
-	})
-	logger.Debug("APP", "Created doubled memo")
+	// Derived signals - these update automatically when counter changes
+	doubled := maya.Signal(0)
+	squared := maya.Signal(0)
+	analysis := maya.Signal("Zero")
 	
-	squared := maya.Memo(func() int {
-		logger.Trace("MEMO", "Computing squared value...")
+	// Create effects to update derived signals when counter changes
+	maya.CreateEffect(func() {
 		value := counter.Get()
-		logger.Trace("MEMO", "Counter value is %d, squared is %d", value, value*value)
-		return value * value
-	})
-	logger.Debug("APP", "Created squared memo")
-	
-	// Computed example - derived state
-	analysis := maya.Computed(func() string {
-		logger.Trace("COMPUTED", "Analyzing counter...")
-		value := counter.Get()
+		doubled.Set(value * 2)
+		squared.Set(value * value)
+		
+		// Update analysis
 		if value < 0 {
-			return "Negative"
+			analysis.Set("Negative")
 		} else if value == 0 {
-			return "Zero"
+			analysis.Set("Zero")
 		} else if value < 10 {
-			return "Small"
+			analysis.Set("Small")
 		} else if value < 100 {
-			return "Medium"
+			analysis.Set("Medium")
+		} else {
+			analysis.Set("Large")
 		}
-		return "Large"
 	})
 	
 	// Create the app
@@ -125,26 +117,26 @@ func main() {
 						},
 					},
 					maya.Column(
-						// Memo section
-						maya.Title("Memoized Values"),
+						// Derived values section
+						maya.Title("Derived Values"),
 					maya.Row(
 						maya.Text("Doubled: "),
-						maya.TextMemo(doubled, func(v int) string {
+						maya.TextSignal(doubled, func(v int) string {
 							return fmt.Sprintf("%d", v)
 						}),
 					),
 					maya.Row(
 						maya.Text("Squared: "),
-						maya.TextMemo(squared, func(v int) string {
+						maya.TextSignal(squared, func(v int) string {
 							return fmt.Sprintf("%d", v)
 						}),
 					),
 					
-					// Computed section
-					maya.Title("Computed Analysis"),
+					// Analysis section
+					maya.Title("Analysis"),
 					maya.Row(
 						maya.Text("Status: "),
-						maya.TextMemo(analysis.Memo, func(v string) string {
+						maya.TextSignal(analysis, func(v string) string {
 							return v
 						}),
 						),

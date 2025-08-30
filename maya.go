@@ -335,14 +335,9 @@ func Signal[T comparable](initial T) *reactive.Signal[T] {
 	return reactive.NewSignal(initial)
 }
 
-// Memo creates a memoized computed value
-func Memo[T any](compute func() T) *reactive.Memo[T] {
-	return reactive.NewMemo(compute)
-}
-
-// Computed creates a computed value with automatic dependency tracking
-func Computed[T any](compute func() T) *reactive.Computed[T] {
-	return reactive.NewComputed(compute)
+// CreateEffect creates a reactive effect that runs when dependencies change
+func CreateEffect(fn func()) *reactive.Effect {
+	return reactive.CreateEffect(fn)
 }
 
 // TextSignal creates a truly reactive text widget
@@ -379,32 +374,3 @@ func TextSignal[T any](signal *reactive.Signal[T], format func(T) string) widget
 	return text
 }
 
-// TextMemo creates a reactive text widget from a computed value
-func TextMemo[T any](memo *reactive.Memo[T], format func(T) string) widgets.WidgetImpl {
-	id := fmt.Sprintf("reactive-memo-%p", memo)
-	
-	// Create text widget with initial value
-	initialValue := format(memo.Peek())
-	text := widgets.NewText(id, initialValue)
-	logger.Trace(logger.TagMemo, "Created TEXT widget with initial value: %s", initialValue)
-	
-	// Create effect that updates when memo changes
-	effect := reactive.CreateEffect(func() {
-		newValue := format(memo.Get())
-		logger.Trace(logger.TagMemo, "TEXT memo updated widget text to: %s", newValue)
-		text.SetText(newValue)
-		text.MarkNeedsRepaint()
-		
-		// Schedule selective DOM update
-		if globalApp != nil && globalApp.batcher != nil {
-			globalApp.batcher.Add(func() {
-				logger.Trace(logger.TagMemo, "Batched TEXT DOM update for: %s", id)
-				globalApp.updateWidget(text)
-			})
-		}
-	})
-	
-	logger.Trace(logger.TagMemo, "TEXT memo effect created with ID: %v", effect)
-	
-	return text
-}

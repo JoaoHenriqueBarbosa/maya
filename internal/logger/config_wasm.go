@@ -7,9 +7,6 @@ package logger
 // DO NOT EDIT MANUALLY
 
 func initConfig() {
-	currentLevel = LevelTrace
-	categories = map[string]bool{
-		"MEMO": true,
-		"COMPUTED": true,
-	}
+	currentLevel = LevelSilent
+	categories = map[string]bool{}
 }

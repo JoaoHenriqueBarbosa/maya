@@ -195,3 +195,10 @@ func (e *Effect) Dispose() {
 func (e *Effect) IsActive() bool {
 	return e.active.Load()
 }
+
+// Watch creates an effect and returns its dispose function
+// This is a convenience function for creating effects that need cleanup
+func Watch(fn func()) func() {
+	effect := CreateEffect(fn)
+	return effect.Dispose
+}

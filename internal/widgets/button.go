@@ -86,6 +86,13 @@ func (b *Button) GetLabel() string {
 	return b.label.Get()
 }
 
+// Click triggers the button's click action
+func (b *Button) Click() {
+	if !b.isDisabled.Get() && b.onPressed != nil {
+		b.onPressed()
+	}
+}
+
 // SetDisabled sets the disabled state
 func (b *Button) SetDisabled(disabled bool) {
 	b.isDisabled.Set(disabled)

@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 	"github.com/maya-framework/maya"
+	"github.com/maya-framework/maya/internal/widgets"
 )
 
 func main() {
@@ -14,7 +15,7 @@ func main() {
 	message := maya.Signal("Click the buttons!")
 	
 	// Create the app
-	app := maya.New(func() maya.Widget {
+	app := maya.New(func() widgets.WidgetImpl {
 		return maya.Container(
 			// Title
 			maya.Title("Maya Counter App"),

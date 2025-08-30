@@ -135,6 +135,15 @@ func (w *WorkflowEngine) AddDependency(from, to string) error {
 	return err
 }
 
+// GetStage retrieves a stage by ID
+func (w *WorkflowEngine) GetStage(id string) (*Stage, bool) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	
+	stage, exists := w.stages[id]
+	return stage, exists
+}
+
 // Execute runs the workflow
 func (w *WorkflowEngine) Execute(ctx context.Context, input interface{}) error {
 	if !w.running.CompareAndSwap(false, true) {

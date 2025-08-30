@@ -118,6 +118,11 @@ func (e *Effect) invalidate() {
 	}
 }
 
+// Invalidate manually triggers the effect to re-run
+func (e *Effect) Invalidate() {
+	e.invalidate()
+}
+
 // addDependency registers a signal as a dependency
 func (e *Effect) addDependency(signal SignalInterface) {
 	e.depmu.Lock()

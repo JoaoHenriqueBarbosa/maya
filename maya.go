@@ -28,6 +28,7 @@ type App struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	root      Component               // Root component for re-rendering
+	renderEffect *reactive.Effect      // Single effect for re-rendering
 }
 
 // New creates a new Maya application - SIMPLE API
@@ -79,39 +80,28 @@ func (app *App) Run() {
 			FontFamily: "system-ui, -apple-system, sans-serif",
 		})
 		
-		// Initial render
-		app.render()
+		// Create single root effect for reactive updates
+		app.setupReactiveEffect()
 		
 		// Start reactive batching
 		app.batcher.Start()
-		app.setupReactiveLoop()
 	})
 	
 	// Keep running
 	select {}
 }
 
-// render executes the pipeline
+// render executes the pipeline with current tree
 func (app *App) render() {
-	println("Re-rendering application...")
-	
-	// Rebuild the widget tree
-	rootWidget := app.root()
-	rootNode := app.widgetToNode(rootWidget)
-	app.tree.SetRoot(rootNode)
-	
-	// Execute the render pipeline
 	if err := app.pipeline.Execute(app.ctx); err != nil {
 		println("Render error:", err.Error())
 	}
 }
 
-// scheduleRender schedules a render using the batcher
+// scheduleRender triggers the root effect to re-evaluate
 func (app *App) scheduleRender() {
-	println("Scheduling render via batcher...")
-	app.batcher.Add(func() {
-		app.render()
-	})
+	// The root effect will automatically re-run when signals change
+	// This method exists for compatibility but isn't needed with proper tracking
 }
 
 // widgetToNode converts a widget to a core.Node recursively
@@ -142,11 +132,19 @@ func (app *App) widgetToNode(widget widgets.WidgetImpl) *core.Node {
 	return node
 }
 
-// setupReactiveLoop sets up the reactive update loop
-func (app *App) setupReactiveLoop() {
-	// Use the REAL batcher for updates
-	app.batcher.Add(func() {
-		app.render()
+// setupReactiveEffect creates the single root effect for all reactive updates
+func (app *App) setupReactiveEffect() {
+	// Single effect that tracks all signal dependencies
+	app.renderEffect = reactive.CreateEffect(func() {
+		// Rebuild widget tree - this tracks signal dependencies
+		rootWidget := app.root()
+		rootNode := app.widgetToNode(rootWidget)
+		app.tree.SetRoot(rootNode)
+		
+		// Batch the actual DOM update
+		app.batcher.Add(func() {
+			app.render()
+		})
 	})
 }
 
@@ -234,16 +232,8 @@ func Signal[T comparable](initial T) *reactive.Signal[T] {
 
 // TextSignal creates a reactive text widget
 func TextSignal[T any](signal *reactive.Signal[T], format func(T) string) widgets.WidgetImpl {
-	text := widgets.NewText("reactive-text", format(signal.Get()))
-	
-	// Create effect to update text when signal changes
-	reactive.CreateEffect(func() {
-		text.SetText(format(signal.Get()))
-		// Trigger re-render if app is running
-		if globalApp != nil {
-			globalApp.scheduleRender()
-		}
-	})
-	
-	return text
+	// Just read the signal - the root effect will track this dependency
+	// No individual effects needed per widget
+	value := format(signal.Get())
+	return widgets.NewText("reactive-text-"+value, value)
 }

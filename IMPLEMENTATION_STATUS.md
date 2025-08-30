@@ -3,441 +3,183 @@
 ## 📊 Visão Geral do Progresso
 
 **Data:** 30 de Agosto de 2025  
-**Versão Go:** 1.24.5  
+**Versão Go:** 1.24  
 **Cobertura de Testes Core:** 99.1%  
 **Cobertura de Testes Reactive:** 96.4%  
 **Status:** 🟢 Em Desenvolvimento Ativo
 
 ---
 
-## ✅ Implementado vs 📝 Planejado
+## ✅ Componentes Implementados
 
-### 1. Core Data Structures ✅
+### 1. Core System ✅ (99.1% coverage)
+- **Tree & Node**: Sistema completo de árvore com iteradores nativos
+- **Weak Pointers**: Implementado com `*weak.Pointer[Node]`
+- **Iteradores Go 1.24**: DFS, BFS, PostOrder, PreOrder funcionando
+- **Cleanup System**: Usando `runtime.AddCleanup` corretamente
 
-#### Planejado (Teoria)
-```go
-// Imaginávamos usar unique.Handle para IDs únicos
-type NodeID = unique.Handle[string]
+### 2. Reactive System ✅ (96.4% coverage)
+- **Signals**: Sistema completo com tracking automático
+- **Effects**: Efeitos com cleanup e dependências
+- **Memos**: Computação lazy com cache
+- **Batch Updates**: Otimização de atualizações
+- **Transactions**: Suporte a transações atômicas
 
-// Imaginávamos que weak.Pointer funcionaria assim
-Parent weak.Pointer[*Node]
+### 3. Widget System ✅ (Implementado)
+- **BaseWidget**: Classe base com signals integrados
+- **Text**: Widget de texto com estilos
+- **Button**: Botão com callbacks funcionando
+- **Container**: Container para layout
+- **Column**: Layout vertical
+- **Row**: Layout horizontal
 
-// Pensávamos que runtime.AddCleanup seria simples
-runtime.AddCleanup(node, func() {
-    node.dispose()
-})
-```
+### 4. Workflow & Graph ✅ (Testado)
+- **WorkflowEngine**: Motor de pipeline multipass
+- **Graph**: Grafo de dependências com topological sort
+- **Stages**: Sistema de estágios para rendering
 
-#### Implementado (Realidade)
-```go
-// NodeID é simplesmente string
-type NodeID string
+### 5. Render Pipeline ✅ (Funcionando)
+- **Pipeline multipass**: Mark dirty → Calculate sizes → Assign positions → Commit DOM
+- **DOM rendering**: Criação recursiva de elementos DOM
+- **Event handling**: Sistema de eventos sem js.FuncOf
 
-// Weak pointer precisa ser um ponteiro para funcionar
-Parent *weak.Pointer[Node]
-
-// runtime.AddCleanup não pode receber o mesmo objeto como ptr e arg
-type cleanupData struct {
-    widget Widget
-}
-runtime.AddCleanup(node, cleanup, &cleanupData{widget: widget})
-```
-
-### 2. Iteradores com Go 1.24 ✅
-
-#### Planejado
-Pensávamos que seria necessário criar estruturas complexas para iteradores.
-
-#### Implementado
-Go 1.24 realmente fornece `iter.Seq[T]` que simplifica muito:
-
-```go
-// Implementação real e elegante
-func (t *Tree) DFS() iter.Seq[*Node] {
-    return func(yield func(*Node) bool) {
-        // Implementação com early termination automático
-        var traverse func(*Node) bool
-        traverse = func(n *Node) bool {
-            if !yield(n) {
-                return false
-            }
-            for _, child := range n.Children {
-                if !traverse(child) {
-                    return false
-                }
-            }
-            return true
-        }
-        if t.root != nil {
-            traverse(t.root)
-        }
-    }
-}
-
-// Uso real
-for node := range tree.DFS() {
-    processNode(node)
-}
-```
-
-### 3. Weak Pointers ✅
-
-#### Planejado
-```go
-// Imaginávamos uso direto
-weakCache weak.Pointer[ComputedValues]
-```
-
-#### Implementado
-```go
-// Precisa ser ponteiro e manejo cuidadoso
-weakCache *weak.Pointer[ComputedValues]
-
-// SetCachedValues
-wc := weak.Make(values)
-n.weakCache = &wc
-
-// GetCachedValues  
-if n.weakCache != nil {
-    if ptr := n.weakCache.Value(); ptr != nil {
-        return ptr
-    }
-}
-return nil
-```
-
-### 4. Testing com Go 1.24 ✅
-
-#### Planejado
-Não tínhamos certeza se `testing.B.Loop()` funcionaria.
-
-#### Implementado
-Funciona perfeitamente e simplifica benchmarks:
-
-```go
-func BenchmarkTreeTraversal(b *testing.B) {
-    tree := buildLargeTree(100)
-    b.ResetTimer()
-    
-    // Go 1.24: b.Loop() mantém o objeto vivo e evita otimizações
-    for b.Loop() {
-        count := 0
-        for range tree.DFS() {
-            count++
-        }
-        if count != 100 {
-            b.Fatalf("Expected 100 nodes, got %d", count)
-        }
-    }
-}
-```
+### 6. WASM Integration ✅ (Parcial)
+- **go:wasmexport**: Funções exportadas funcionando
+- **Event callbacks**: Cliques processados corretamente  
+- **DOM manipulation**: Renderização inicial funcionando
+- **Reactive updates**: ⚠️ Pendente - DOM não atualiza com mudanças de Signal
 
 ---
-
-## ✅ Sistema de Signals Reativo (Completo!)
-
-### Implementado vs Imaginado
-
-#### Planejado (Teoria)
-```go
-// Imaginávamos usar unique.Handle para canonicalização
-type Signal[T comparable] struct {
-    value  T
-    handle unique.Handle[T]  // Comparação O(1)
-}
-
-// Achávamos que weak.Pointer seria direto
-weakCache weak.Pointer[T]
-```
-
-#### Implementado (Realidade) 
-```go
-// Signal sem unique (não existe)
-type Signal[T any] struct {
-    value    T
-    version  atomic.Uint64
-    mu       sync.RWMutex
-    observers map[uint64]*Effect
-}
-
-// Weak pointer para Memo cache
-weakCache *weak.Pointer[T]  // Precisa ser ponteiro!
-```
-
-### Features Implementadas ✅
-- [x] Signal[T] com tracking automático
-- [x] Effect system com cleanup e invalidação
-- [x] Batch updates para otimização
-- [x] Memo e Computed com lazy evaluation
-- [x] Transaction support
-- [x] Goroutine-local effect tracking
-- [x] Untrack para prevenir dependências
-
-### Métricas do Sistema Reativo
-```
-Cobertura: 96.4%
-Arquivos: 10 (5 implementação + 5 testes)
-Linhas: ~2300
-
-Benchmarks:
-BenchmarkSignal_Get         10000000    ~100 ns/op
-BenchmarkSignal_Set          5000000    ~300 ns/op  
-BenchmarkBatch_Updates       1000000    ~1000 ns/op
-```
 
 ## 🚧 Em Desenvolvimento
 
-### Widget System
-- [ ] Widget interface base ✅
-- [ ] Widgets concretos (Text, Button, etc.)
-- [ ] Layout widgets (Row, Column, Stack)
+### Re-render Reativo
+- [ ] Conectar Signals ao pipeline de render
+- [ ] Implementar invalidação e re-render automático
+- [ ] Otimizar updates parciais do DOM
 
 ---
 
-## ❌ Mudanças do Plano Original
+## 📈 Arquitetura Atual
 
-### 1. unique Package
-**Planejado:** Usar `unique.Handle` para NodeIDs  
-**Realidade:** Não existe no Go 1.24, usamos string simples  
-**Impacto:** Nenhum - strings funcionam bem para IDs
+```
+maya.go (240 linhas - API pública)
+    ├── internal/core (Tree, Node) - 99.1% coverage
+    ├── internal/reactive (Signals) - 96.4% coverage
+    ├── internal/workflow (Pipeline) - Testado
+    ├── internal/graph (Dependencies) - Testado
+    ├── internal/render (Pipeline) - Funcionando
+    └── internal/widgets (UI Components) - Testado
+```
 
-### 2. Tool Directives
-**Planejado:** 
+### Fluxo de Dados
+1. **User Code** → Cria widgets com Signals
+2. **maya.go** → API simples (New, Container, Button, etc.)
+3. **Tree Building** → Converte widgets em core.Node tree
+4. **Render Pipeline** → Processa árvore em múltiplas passadas
+5. **DOM Commit** → Renderiza no navegador
+6. **Events** → go:wasmexport handleEvent → callbacks → Signal updates
+7. **Re-render** → ⚠️ Implementação pendente
+
+---
+
+## ✅ go:wasmexport Funcionando!
+
+### Implementação Correta
 ```go
-tool (
-    github.com/evanw/esbuild/cmd/esbuild@latest
-)
-```
-**Realidade:** Sintaxe não suportada ainda  
-**Solução:** Usar go install tradicional
-
-### 3. go:wasmexport
-**Planejado:** Usar para exportar funções diretamente  
-**Status:** Disponível mas não implementado ainda
-
-### 4. Swiss Tables
-**Planejado:** Configuração manual  
-**Realidade:** Go 1.24 usa automaticamente para maps!  
-**Benefício:** Performance grátis de 30%
-
----
-
-## 📈 Métricas de Performance
-
-### Benchmarks Atuais
-```
-BenchmarkTreeTraversal-6     2089418    573.6 ns/op    56 B/op    4 allocs/op
-BenchmarkTree_DFSTraversal    100000     12 µs/op
-BenchmarkTree_BFSTraversal    100000     14 µs/op  
-BenchmarkTree_FindNodeByID     10000    120 ns/op
-```
-
-### Comparação com Plano Original
-| Métrica | Esperado | Real | Status |
-|---------|----------|------|--------|
-| Tree Traversal (100 nodes) | <1ms | 573ns | ✅ Melhor |
-| Memory per Node | ~100B | 56B | ✅ Melhor |
-| Allocations | 10-20 | 4 | ✅ Melhor |
-
----
-
-## 🐛 Issues Encontradas e Resolvidas
-
-### 1. runtime.AddCleanup Panic
-**Problema:** `panic: runtime.AddCleanup: ptr is equal to arg`  
-**Causa:** Não pode passar o mesmo objeto como ptr e arg  
-**Solução:** Criar struct separada para cleanup data
-
-### 2. Weak Pointer Types
-**Problema:** Type mismatch com `weak.Pointer[*Node]`  
-**Causa:** Weak pointer de ponteiro cria dupla indireção  
-**Solução:** Usar `*weak.Pointer[Node]` 
-
-### 3. Iterator Early Termination
-**Problema:** Iteradores não paravam quando break era usado  
-**Causa:** Implementação inicial não checava retorno de yield  
-**Solução:** Sempre checar `if !yield(node) { return false }`
-
----
-
-## 📚 Aprendizados Importantes
-
-### 1. Go 1.24 Features Reais
-- ✅ `iter` package funciona perfeitamente
-- ✅ `weak` package está disponível e funcional
-- ✅ `runtime.AddCleanup` substitui SetFinalizer
-- ✅ `testing.B.Loop()` elimina necessidade de b.N
-- ✅ Swiss Tables automáticas em maps
-- ✅ `sync/atomic` tipos genéricos (Uint64, Bool, etc)
-- ❌ `unique` package não existe
-- ❌ Tool directives não funcionam como esperado
-
-### 2. Sistema Reativo - Descobertas
-- **Goroutine ID parsing**: Mais complexo que esperado, precisou fallback
-- **Effect cleanup**: Precisa getCurrentEffect() dentro do effect
-- **Batch flushing**: Requer coletar effects após signal notifications
-- **Weak pointer em Memo**: Precisa ser `*weak.Pointer[T]` não `weak.Pointer[T]`
-- **Signal interface**: Precisa getObservers() para batching funcionar
-
-### 2. Padrões que Funcionam
-```go
-// Padrão para weak references
-type Node struct {
-    parent *weak.Pointer[Node]  // Não weak.Pointer[*Node]
-}
-
-// Padrão para cleanup
-type cleanupData struct {
-    resources []Resource
-}
-runtime.AddCleanup(obj, cleanup, &cleanupData{...})
-
-// Padrão para iteradores
-func (c *Collection) Items() iter.Seq[*Item] {
-    return func(yield func(*Item) bool) {
-        for _, item := range c.items {
-            if !yield(item) {
-                return
-            }
-        }
+// exports.go - Package maya (não internal!)
+//go:wasmexport handleEvent  
+func handleEvent(callbackID int32) {
+    if callback := render.GetCallback(callbackID); callback != nil {
+        callback()
     }
 }
 ```
 
-### 3. Testing Best Practices
-- Separar testes por componente (node_test.go, tree_test.go)
-- Usar subtests com t.Run() para organização
-- Cobrir edge cases em arquivo separado
-- Usar mockWidget para testes isolados
-- Benchmarks com b.Loop() para resultados precisos
+### JavaScript Integration
+```javascript
+// Acesso via instance.exports
+window.wasmExports.handleEvent(callbackID)
+```
+
+### Status dos Eventos
+- ✅ Funções exportadas visíveis no WASM exports
+- ✅ Callbacks registrados e executados
+- ✅ Estado (Signals) atualizando corretamente
+- ⚠️ DOM não re-renderiza com mudanças
 
 ---
 
-## 🎯 Próximos Passos
+## 📊 Métricas de Performance
 
-1. ~~**Implementar Sistema de Signals**~~ ✅ COMPLETO!
+### Benchmarks
+```
+BenchmarkTreeTraversal-6     2089418    573.6 ns/op    56 B/op    4 allocs/op
+BenchmarkSignal_Get         10000000    ~100 ns/op
+BenchmarkSignal_Set          5000000    ~300 ns/op  
+```
 
-2. **Criar Widgets Básicos** (Próximo)
-   - Text, Button, Container
-   - Layout widgets (Row, Column, Stack)
-   - Input widgets
-
-3. **Implementar Layout Engine**
-   - Flexbox algorithm
-   - Constraint solver
-   - Multi-pass layout
-
-4. **WASM Build System**
-   - Configurar build para WASM
-   - Implementar go:wasmexport
-   - Criar exemplo funcional
+### Tamanho do Código
+- **maya.go**: 240 linhas (era 749)
+- **Total internal/**: ~5000 linhas
+- **Testes**: ~3000 linhas
+- **WASM output**: ~3MB (não otimizado)
 
 ---
 
-## 📊 Cobertura de Testes Detalhada
+## 🎯 Próximos Passos Imediatos
 
-### Core Package
-```
-Package: github.com/maya-framework/maya/internal/core
-Coverage: 99.1% of statements
+1. **Implementar Re-render Reativo**
+   - Conectar Signal changes ao pipeline
+   - Implementar diff e patch do DOM
+   - Otimizar updates parciais
 
-✅ node.go          100.0%
-✅ tree.go           98.8%
-✅ Iterators        100.0%
-✅ Weak References  100.0%
-✅ Cleanup System   100.0%
-✅ Parallel Proc.    95.0%
-```
+2. **Melhorar Examples**
+   - Counter app completo
+   - Todo list
+   - Form inputs
 
-### Reactive Package
-```
-Package: github.com/maya-framework/maya/internal/reactive
-Coverage: 96.4% of statements
-
-✅ signal.go        100.0% (core operations)
-✅ effect.go         90.9%
-✅ batch.go          95.8%
-✅ memo.go           87.5%
-✅ tracking.go       92.3%
-```
+3. **Otimização WASM**
+   - Reduzir bundle size
+   - Implementar code splitting
+   - Cache de renderização
 
 ---
 
-## 🔄 Diferenças Arquiteturais
+## 📝 Lições Aprendidas
 
-### Virtual DOM vs Signals
-**Original:** Considerávamos Virtual DOM  
-**Atual:** Decidimos por Signals (fine-grained reactivity)  
-**Razão:** Performance superior, menos memória, updates precisos
+### go:wasmexport
+- Precisa estar no package principal (não internal)
+- Funções acessadas via `instance.exports`
+- Não usa `window.funcName`
 
-### WebGPU
-**Original:** Planejado como feature principal  
-**Atual:** Adiado para fase posterior  
-**Razão:** Foco em funcionalidade core primeiro
+### Weak Pointers
+- Usar `*weak.Pointer[T]` não `weak.Pointer[*T]`
+- Sempre checar nil antes de Value()
 
-### Layout Engine
-**Original:** GPU-accelerated desde início  
-**Atual:** CPU primeiro, GPU depois  
-**Razão:** Simplicidade e debugging
-
----
-
-## ✨ Sucessos Não Planejados
-
-1. **Cobertura de 99.1%** - Meta era 100%, mas 99.1% é excelente
-2. **Performance de Iteradores** - 10x mais rápido que esperado
-3. **Uso de Memória** - 50% menor que projetado
-4. **Swiss Tables Automáticas** - Boost grátis de 30%
+### Event System
+- Possível implementar sem js.FuncOf
+- Registry de callbacks por ID funciona bem
+- go:wasmexport reduz overhead significativamente
 
 ---
 
-## 📝 Notas Técnicas
+## ❌ Features Não Existentes no Go 1.24
 
-### Configuração de Build
-```makefile
-# Makefile funcional
-GO_VERSION=1.24
-GOFLAGS=-ldflags="-s -w"
-
-wasm:
-    GOOS=js GOARCH=wasm go build $(GOFLAGS) -o dist/maya.wasm ./cmd/maya/...
-
-test:
-    go test -v -race -cover ./...
-
-bench:
-    go test -bench=. -benchmem ./...
-```
-
-### Estrutura de Projeto Real
-```
-maya/
-├── go.mod (Go 1.24)
-├── Makefile
-├── internal/
-│   ├── core/
-│   │   ├── node.go         (Widget tree node)
-│   │   ├── node_test.go    (100% coverage)
-│   │   ├── tree.go         (Tree structure)
-│   │   ├── tree_test.go    (98.8% coverage)
-│   │   └── edge_cases_test.go
-│   └── reactive/
-│       ├── signal.go       (Reactive signals)
-│       ├── effect.go       (Effect system)
-│       ├── batch.go        (Batch updates)
-│       ├── memo.go         (Memoization)
-│       ├── tracking.go     (Dependency tracking)
-│       └── *_test.go       (96.4% coverage)
-├── docs/
-│   ├── OVERVIEW.md
-│   ├── BREAKDOWN.md
-│   ├── IMPLEMENTATION_STATUS.md
-│   ├── TRAVERSAL.md
-│   ├── WORKFLOW.md
-│   └── ROADMAP.md
-└── examples/ (próximo)
-```
+1. **unique package** - Não existe, usamos strings
+2. **Tool directives** - Sintaxe não suportada
+3. **Generic type aliases** - Limitado, não como esperado
 
 ---
 
-Este documento será atualizado conforme o projeto evolui.
+## ✨ Sucessos
+
+1. **Arquitetura limpa** - maya.go é apenas API
+2. **Alta cobertura** - 99%+ no core
+3. **go:wasmexport funcionando** - Eventos processados
+4. **Zero CSS dependencies** - Maya calcula tudo
+5. **Performance excelente** - <1ms para 100 nodes
+
+---
+
+Este documento reflete o estado atual após refatoração massiva e implementação de go:wasmexport.

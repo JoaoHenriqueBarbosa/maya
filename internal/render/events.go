@@ -46,19 +46,5 @@ func GetCallback(id int32) func() {
 	return globalEventRegistry.callbacks[id]
 }
 
-// HandleEvent is exported to JavaScript to handle events
-//
-//go:wasmexport handleEvent
-func HandleEvent(callbackID int32) {
-	if callback := GetCallback(callbackID); callback != nil {
-		callback()
-	}
-}
-
-// HandleButtonClick is exported for button clicks
-//
-//go:wasmexport handleButtonClick
-func HandleButtonClick(buttonID string) {
-	// This will be connected to button widgets
-	// For now, just a placeholder
-}
+// Note: The actual exported functions are in maya/exports.go
+// because go:wasmexport needs to be in the main package

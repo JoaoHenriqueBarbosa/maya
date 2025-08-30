@@ -4,7 +4,9 @@
 package maya
 
 import (
+	"fmt"
 	"syscall/js"
+	"github.com/maya-framework/maya/internal/render"
 )
 
 // domReadyCallbacks stores callbacks for DOM ready events
@@ -20,6 +22,23 @@ func onDOMReady() {
 		callback()
 	}
 	domReadyCallbacks = nil
+}
+
+// handleEvent is exported to JavaScript to handle events
+//
+//go:wasmexport handleEvent  
+func handleEvent(callbackID int32) {
+	fmt.Printf("handleEvent called with ID: %d\n", callbackID)
+	if callback := render.GetCallback(callbackID); callback != nil {
+		callback()
+	}
+}
+
+// handleButtonClick is exported for button clicks
+//
+//go:wasmexport handleButtonClick
+func handleButtonClick(buttonID string) {
+	fmt.Printf("handleButtonClick called with ID: %s\n", buttonID)
 }
 
 // waitForDOM waits for the DOM to be ready (without js.FuncOf)
@@ -39,15 +58,8 @@ func waitForDOM(callback func()) {
 		// Store callback to be called when DOM is ready
 		domReadyCallbacks = append(domReadyCallbacks, callback)
 		
-		// Set up JavaScript side to call our exported function
-		js.Global().Call("eval", `
-			if (document.readyState === "complete" || document.readyState === "interactive") {
-				window.onDOMReady();
-			} else {
-				document.addEventListener("DOMContentLoaded", function() {
-					window.onDOMReady();
-				});
-			}
-		`)
+		// Setup listener in JavaScript
+		// The JavaScript side will call wasmExports.onDOMReady when ready
+		// This is set up in wasm_init_correct.js
 	}
 }

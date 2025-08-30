@@ -306,9 +306,9 @@ func (p *Pipeline) createDOMTree(node *core.Node, parentElement js.Value) {
 		// Register callback without js.FuncOf
 		callbackID := RegisterCallback(widget.Click)
 		
-		// Set onclick to call our exported function
+		// Set onclick to call our exported function from WASM exports
 		elem.Set("onclick", js.Global().Get("Function").New(
-			"return window.handleEvent("+fmt.Sprintf("%d", callbackID)+");",
+			"return window.wasmExports.handleEvent("+fmt.Sprintf("%d", callbackID)+");",
 		))
 
 	case *widgets.Container, *widgets.Column, *widgets.Row:

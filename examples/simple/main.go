@@ -31,18 +31,24 @@ func main() {
 			// Buttons
 			maya.Row(
 				maya.Button("Increment", func() {
+					fmt.Println("Increment button clicked!")
 					counter.Set(counter.Get() + 1)
 					message.Set(fmt.Sprintf("Incremented to %d", counter.Get()))
+					fmt.Printf("Counter is now: %d\n", counter.Get())
 				}),
 				
 				maya.Button("Decrement", func() {
+					fmt.Println("Decrement button clicked!")
 					counter.Set(counter.Get() - 1)
 					message.Set(fmt.Sprintf("Decremented to %d", counter.Get()))
+					fmt.Printf("Counter is now: %d\n", counter.Get())
 				}),
 				
 				maya.Button("Reset", func() {
+					fmt.Println("Reset button clicked!")
 					counter.Set(0)
 					message.Set("Counter reset!")
+					fmt.Printf("Counter is now: %d\n", counter.Get())
 				}),
 			),
 			

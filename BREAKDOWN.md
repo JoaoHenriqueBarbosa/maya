@@ -189,6 +189,7 @@ type Memo[T comparable] struct {
     compute   func() T
     sources   []*Signal[any]
     stale     atomic.Bool
+    weak      weak.Pointer[T]  // Go 1.24: cache com weak ref
 }
 
 func CreateMemo[T comparable](compute func() T) *Memo[T] {
@@ -448,7 +449,16 @@ func (p *Pool[T]) Put(item T) {
 // Pools especializados
 var (
     nodePool = NewPool(1000, 
-        func() *Node { return &Node{Children: make([]*Node, 0, 4)} },
+        func() *Node { 
+            n := &Node{Children: make([]*Node, 0, 4)}
+            // Go 1.24: AddCleanup para recursos GPU
+            runtime.AddCleanup(n, func() {
+                if n.gpu != nil {
+                    n.gpu.Release()
+                }
+            })
+            return n
+        },
         func(n **Node) { 
             (*n).Children = (*n).Children[:0]
             (*n).dirtyFlags = 0
@@ -850,7 +860,74 @@ func (t *Timeline) run() {
 }
 ```
 
-## 5. Performance Profiling
+## 5. WebGPU Compute Integration (2025)
+
+### 5.1 Layout Compute Shader
+
+```go
+// Compute shader para layout paralelo
+const layoutComputeWGSL = `
+@group(0) @binding(0) var<storage, read> widgets: array<Widget>;
+@group(0) @binding(1) var<storage, read> constraints: array<Constraints>;
+@group(0) @binding(2) var<storage, read_write> layouts: array<Layout>;
+
+struct Widget {
+    width: f32,
+    height: f32,
+    flex_grow: f32,
+    flex_shrink: f32,
+    margin: vec4<f32>,
+    padding: vec4<f32>,
+}
+
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let idx = id.x;
+    if (idx >= arrayLength(&widgets)) { return; }
+    
+    let widget = widgets[idx];
+    let constraint = constraints[idx];
+    
+    // Flexbox algorithm paralelo
+    var layout: Layout;
+    layout.x = calculateX(widget, constraint);
+    layout.y = calculateY(widget, constraint);
+    layout.width = calculateWidth(widget, constraint);
+    layout.height = calculateHeight(widget, constraint);
+    
+    layouts[idx] = layout;
+}
+`
+
+type GPULayoutEngine struct {
+    device   js.Value
+    pipeline js.Value
+    buffers  map[string]js.Value
+}
+
+func (e *GPULayoutEngine) ComputeLayout(widgets []Widget) []Layout {
+    // Upload para GPU
+    e.uploadWidgets(widgets)
+    
+    // Execute compute shader
+    encoder := e.device.Call("createCommandEncoder")
+    pass := encoder.Call("beginComputePass")
+    pass.Call("setPipeline", e.pipeline)
+    pass.Call("setBindGroup", 0, e.bindGroup)
+    pass.Call("dispatchWorkgroups", (len(widgets)+63)/64)
+    pass.Call("end")
+    
+    // Submit e aguarda
+    e.device.Get("queue").Call("submit", []interface{}{
+        encoder.Call("finish"),
+    })
+    
+    // Read back results
+    return e.readLayouts()
+}
+```
+
+## 6. Performance Profiling
 
 ### 5.1 Frame Budget Tracker
 

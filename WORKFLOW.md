@@ -1,4 +1,4 @@
-# Maya Framework - Sistema de Workflow com Go 1.23+ Concurrency
+# Maya Framework - Sistema de Workflow com Go 1.24+ Concurrency
 
 ## 1. Arquitetura de Workflow Moderna
 
@@ -16,6 +16,7 @@ import (
 )
 
 // Pipeline com generics e iteradores
+// Go 1.24: Generic type aliases agora oficial!
 type Pipeline[T, R any] struct {
     name      string
     processor func(context.Context, T) (R, error)
@@ -613,7 +614,7 @@ type MouseProcessor struct {
 func (p *MouseProcessor) Process(ctx context.Context, events iter.Seq[Event]) iter.Seq[ProcessedEvent] {
     return func(yield func(ProcessedEvent) bool) {
         ticker := time.NewTicker(p.throttle)
-        defer ticker.Stop()
+        defer ticker.Stop()  // Go 1.24: Timer agora é GC-friendly sem Stop explícito!
         
         batch := make([]MouseEvent, 0, 100)
         
@@ -1123,7 +1124,37 @@ func (d *Debouncer) Add(change FileChange) {
 }
 ```
 
-## 10. Coordenação Geral
+## 10. Tool Management com Go 1.24
+
+### 10.1 Tool Directives Integration
+
+```go
+// go.mod com tool directives (Go 1.24)
+module maya
+
+go 1.24
+
+tool (
+    github.com/evanw/esbuild/cmd/esbuild@latest
+    github.com/agnivade/wasmbrowsertest@latest
+    github.com/cosmtrek/air@latest
+)
+
+// Makefile simplificado
+// make install-tools
+install-tools:
+	go install tool
+
+// make dev
+dev:
+	go tool air
+
+// make test-wasm
+test-wasm:
+	go tool wasmbrowsertest
+```
+
+## 11. Coordenação Geral
 
 ### 10.1 Application Workflow Manager
 

@@ -1,8 +1,12 @@
-# Maya Framework - Roadmap de Desenvolvimento 2024-2025
+# Maya Framework - Roadmap de Desenvolvimento 2025-2026
 
 ## Visão Geral
 
-Maya é uma framework UI moderna em Go 1.23+ compilada para WebAssembly, aproveitando as tecnologias mais recentes para criar uma experiência de desenvolvimento superior.
+Maya é uma framework UI moderna em Go 1.24+ compilada para WebAssembly, aproveitando as tecnologias mais recentes para criar uma experiência de desenvolvimento superior.
+
+## Atualização Agosto 2025
+
+Com Go 1.24 lançado e WebGPU maduro, ajustamos o roadmap para aproveitar as novas features.
 
 ## Estrutura de Épicos
 
@@ -19,19 +23,19 @@ Maya é uma framework UI moderna em Go 1.23+ compilada para WebAssembly, aprovei
 📦 Epic 10: WASM Optimization & Distribution (2-3 semanas)
 ```
 
-**Tempo Total Estimado:** 26-36 semanas (6-9 meses)
+**Tempo Total Estimado:** 20-30 semanas (5-7 meses) - Reduzido devido às novas features do Go 1.24
 
 ---
 
 ## Epic 1: Core Foundation & Modern Go Features 🚀
 
 ### Objetivo
-Estabelecer fundação sólida usando Go 1.23+ features, incluindo iteradores nativos, generics avançados e unique package.
+Estabelecer fundação sólida usando Go 1.24+ features, incluindo generic type aliases (agora oficial!), runtime.AddCleanup, weak pointers, e go:wasmexport.
 
 ### Tasks
 
-#### Task 1.1: Project Setup com Go 1.23+
-- [ ] **1.1.1** Inicializar módulo Go 1.23 com estrutura moderna
+#### Task 1.1: Project Setup com Go 1.24+
+- [ ] **1.1.1** Inicializar módulo Go 1.24 com estrutura moderna
   ```
   /cmd         - Entry points
   /pkg         - Public packages
@@ -40,10 +44,10 @@ Estabelecer fundação sólida usando Go 1.23+ features, incluindo iteradores na
   /shaders     - WGSL shaders
   /examples    - Example apps
   ```
-- [ ] **1.1.2** Configurar go.mod com Go 1.23 e dependencies
-- [ ] **1.1.3** Setup build system com suporte a TinyGo
-- [ ] **1.1.4** Configurar GitHub Actions com Go 1.23
-- [ ] **1.1.5** Criar Makefile com targets para WASM/TinyGo
+- [ ] **1.1.2** Configurar go.mod com Go 1.24 e tool directives
+- [ ] **1.1.3** Setup build system com suporte a TinyGo e WASI 0.2
+- [ ] **1.1.4** Configurar GitHub Actions com Go 1.24
+- [ ] **1.1.5** Criar Makefile com targets para WASM/TinyGo/go:wasmexport
 
 #### Task 1.2: Core Data Structures com Generics
 - [ ] **1.2.1** Implementar Node com unique.Handle para IDs
@@ -66,12 +70,12 @@ Estabelecer fundação sólida usando Go 1.23+ features, incluindo iteradores na
 - [ ] **1.4.4** Criar sistema de backpressure
 - [ ] **1.4.5** Adicionar graceful shutdown
 
-#### Task 1.5: Memory Optimization
+#### Task 1.5: Memory Optimization com Go 1.24
 - [ ] **1.5.1** Implementar string interning com unique.Handle
-- [ ] **1.5.2** Criar object pools especializados
-- [ ] **1.5.3** Implementar memory profiler
-- [ ] **1.5.4** Adicionar limites configuráveis
-- [ ] **1.5.5** Criar benchmarks de memória
+- [ ] **1.5.2** Usar weak.Pointer para caches eficientes
+- [ ] **1.5.3** Substituir SetFinalizer por runtime.AddCleanup
+- [ ] **1.5.4** Implementar pools com Swiss Tables (maps mais rápidos)
+- [ ] **1.5.5** Criar benchmarks usando testing.B.Loop
 
 ---
 
@@ -540,14 +544,14 @@ Otimizar para produção com bundle mínimo e performance máxima.
 ### Riscos Técnicos
 
 1. **WebGPU Browser Support**
-   - Risco: Ainda não universalmente suportado
+   - Risco: Safari ainda sem algumas features (Memory64, Multiple Memories)
    - Mitigação: Fallback robusto para Canvas2D
-   - Contingência: WebGL 2.0 como middle ground
+   - Status 2025: Chrome/Firefox totalmente suportados, Safari 90%
 
 2. **WASM Bundle Size**
-   - Risco: Go produz bundles grandes
-   - Mitigação: TinyGo para componentes críticos
-   - Contingência: Code splitting agressivo
+   - Risco: Go produz bundles grandes (~1.8MB mínimo)
+   - Mitigação: TinyGo (~8KB hello world) + go:wasmexport
+   - Solução 2025: go:wasmexport reduz overhead significativamente
 
 3. **Performance em Mobile**
    - Risco: Devices low-end podem ter problemas
@@ -595,9 +599,11 @@ Otimizar para produção com bundle mínimo e performance máxima.
 - CLI tools finalizadas
 - Community feedback incorporated
 
-### 🎯 M4: 1.0 Release (Dez 2025)
+### 🎯 M4: 1.0 Release (Mar 2026)
 - Production ready
-- Stable API
+- Stable API com go:wasmexport
+- WebGPU compute shaders para layout
+- WASI 0.3 support (async)
 - Ecosystem estabelecido
 - Case studies publicados
 
@@ -605,19 +611,19 @@ Otimizar para produção com bundle mínimo e performance máxima.
 
 ## Próximos Passos Imediatos
 
-### Semana 1-2
+### Semana 1-2 (Set 2025)
 1. ⬜ Setup repositório GitHub
-2. ⬜ Configurar Go 1.23 environment
-3. ⬜ Implementar primeiro iterador
-4. ⬜ Criar PoC de Signal system
-5. ⬜ Setup CI/CD básico
+2. ⬜ Configurar Go 1.24 environment
+3. ⬜ Implementar generic type aliases
+4. ⬜ Criar PoC com go:wasmexport
+5. ⬜ Setup CI/CD com Go 1.24
 
-### Semana 3-4
-1. ⬜ Implementar Tree com iteradores
-2. ⬜ Criar primeiros widgets
-3. ⬜ PoC WebGPU rendering
-4. ⬜ Benchmarks iniciais
-5. ⬜ Publicar roadmap público
+### Semana 3-4 (Set 2025)
+1. ⬜ Implementar weak.Pointer para caches
+2. ⬜ Usar runtime.AddCleanup em widgets
+3. ⬜ PoC WebGPU compute shaders
+4. ⬜ Benchmarks com testing.B.Loop
+5. ⬜ Publicar roadmap atualizado
 
 ### Mês 2
 1. ⬜ Alpha interno funcional
@@ -627,41 +633,3 @@ Otimizar para produção com bundle mínimo e performance máxima.
 5. ⬜ Primeiro contributor externo
 
 ---
-
-## Como Contribuir
-
-1. **Code Contributions**
-   - Fork e PR no GitHub
-   - Seguir style guide
-   - Incluir testes
-
-2. **Documentation**
-   - Melhorar exemplos
-   - Traduzir docs
-   - Criar tutorials
-
-3. **Community**
-   - Reportar bugs
-   - Sugerir features
-   - Ajudar outros usuários
-
-4. **Sponsorship**
-   - GitHub Sponsors
-   - Open Collective
-   - Corporate backing
-
----
-
-## Contato
-
-- **GitHub:** github.com/maya-framework/maya
-- **Discord:** discord.gg/maya
-- **Twitter:** @MayaFramework
-- **Email:** team@maya-framework.dev
-
----
-
-*Este roadmap é um documento vivo e será atualizado conforme o projeto evolui.*
-
-**Última atualização:** Dezembro 2024
-**Versão:** 2.0.0

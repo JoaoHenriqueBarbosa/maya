@@ -115,12 +115,20 @@ func (r *CanvasRenderer) Paint(cmd PaintCommand) {
 	// Save context state
 	r.ctx.Call("save")
 	
-	// Draw background if specified
+	// Apply shadow if present
+	if cmd.Shadow != nil {
+		r.ctx.Set("shadowColor", formatCanvasColor(cmd.Shadow.Color))
+		r.ctx.Set("shadowOffsetX", cmd.Shadow.OffsetX)
+		r.ctx.Set("shadowOffsetY", cmd.Shadow.OffsetY)
+		r.ctx.Set("shadowBlur", cmd.Shadow.BlurRadius)
+	}
+	
+	// Draw background (shadow will be applied automatically to it)
 	if cmd.Background.A > 0 || cmd.Type == PaintContainer {
 		if cmd.Background.A > 0 {
 			r.ctx.Set("fillStyle", formatCanvasColor(cmd.Background))
 		} else {
-			r.ctx.Set("fillStyle", "transparent")
+			r.ctx.Set("fillStyle", "white") // Use white for containers without explicit background
 		}
 		
 		if cmd.Border != nil && cmd.Border.Radius > 0 {
@@ -128,6 +136,14 @@ func (r *CanvasRenderer) Paint(cmd PaintCommand) {
 			r.ctx.Call("fill")
 		} else {
 			r.ctx.Call("fillRect", cmd.Bounds.X, cmd.Bounds.Y, cmd.Bounds.Width, cmd.Bounds.Height)
+		}
+		
+		// Clear shadow after drawing background
+		if cmd.Shadow != nil {
+			r.ctx.Set("shadowColor", "transparent")
+			r.ctx.Set("shadowBlur", 0)
+			r.ctx.Set("shadowOffsetX", 0)
+			r.ctx.Set("shadowOffsetY", 0)
 		}
 	}
 	
@@ -142,14 +158,6 @@ func (r *CanvasRenderer) Paint(cmd PaintCommand) {
 		} else {
 			r.ctx.Call("strokeRect", cmd.Bounds.X, cmd.Bounds.Y, cmd.Bounds.Width, cmd.Bounds.Height)
 		}
-	}
-	
-	// Draw shadow
-	if cmd.Shadow != nil {
-		r.ctx.Set("shadowColor", formatCanvasColor(cmd.Shadow.Color))
-		r.ctx.Set("shadowOffsetX", cmd.Shadow.OffsetX)
-		r.ctx.Set("shadowOffsetY", cmd.Shadow.OffsetY)
-		r.ctx.Set("shadowBlur", cmd.Shadow.BlurRadius)
 	}
 	
 	// Draw content based on type

@@ -72,8 +72,11 @@ func (e *Effect) run() {
 		return
 	}
 	
+	println("[EFFECT] Running effect ID:", e.id)
+	
 	// Prevent recursive runs
 	if !e.running.CompareAndSwap(false, true) {
+		println("[EFFECT] Already running, skipping")
 		return
 	}
 	defer e.running.Store(false)
@@ -82,7 +85,9 @@ func (e *Effect) run() {
 	e.dirty.Store(false)
 	
 	// Clear old dependencies
+	oldDeps := len(e.dependencies)
 	e.clearDependencies()
+	println("[EFFECT] Cleared", oldDeps, "old dependencies")
 	
 	// Push to effect stack for dependency tracking
 	pushEffect(e)
@@ -93,6 +98,8 @@ func (e *Effect) run() {
 	
 	// Execute the effect function
 	e.fn()
+	
+	println("[EFFECT] Effect completed, now tracking", len(e.dependencies), "dependencies")
 }
 
 // invalidate marks the effect as needing re-execution

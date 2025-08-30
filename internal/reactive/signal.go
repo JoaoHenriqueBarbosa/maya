@@ -1,6 +1,7 @@
 package reactive
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 )
@@ -39,6 +40,7 @@ func NewSignalWithEquals[T any](initial T, equals func(a, b T) bool) *Signal[T] 
 func (s *Signal[T]) Get() T {
 	// Track this signal as a dependency of the current effect
 	if current := getCurrentEffect(); current != nil {
+		println("[SIGNAL] Tracking read by effect ID:", current.id)
 		s.addObserver(current)
 		current.addDependency(s)
 	}
@@ -65,16 +67,21 @@ func (s *Signal[T]) Set(value T) {
 		return
 	}
 	
+	oldValue := s.value
 	s.value = value
 	s.version.Add(1)
 	s.mu.Unlock()
 	
+	println("[SIGNAL] Value changed from", fmt.Sprint(oldValue), "to", fmt.Sprint(value))
+	
 	// Check if we're in a batch
 	if isInBatch() {
+		println("[SIGNAL] In batch, queuing notification")
 		addPendingSignal(s)
 		return
 	}
 	
+	println("[SIGNAL] Notifying", len(s.getObservers()), "observers")
 	s.notify()
 }
 

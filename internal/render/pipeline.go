@@ -127,6 +127,8 @@ func (p *Pipeline) setupStages() {
 
 // Execute runs the rendering pipeline
 func (p *Pipeline) Execute(ctx context.Context) error {
+	println("[PIPELINE] Starting execution...")
+	
 	// Get topological order from dependency graph
 	order, err := p.dependencies.TopologicalSort()
 	if err != nil {
@@ -142,6 +144,7 @@ func (p *Pipeline) Execute(ctx context.Context) error {
 	for _, nodeID := range order {
 		stageID := string(nodeID)
 		if stage, exists := p.engine.GetStage(stageID); exists {
+			println("[PIPELINE] Executing stage:", stageID)
 			stageCtx.Stage = stage
 			if err := stage.Execute(ctx, stageCtx); err != nil {
 				return fmt.Errorf("stage %s failed: %w", stageID, err)
@@ -274,6 +277,8 @@ func (p *Pipeline) assignNodePosition(node *core.Node) {
 
 // commitToDOM renders the tree to the DOM
 func (p *Pipeline) commitToDOM() {
+	println("[DOM-COMMIT] Clearing and rebuilding DOM...")
+	
 	// Clear container and mapping
 	p.container.Set("innerHTML", "")
 	p.nodeElements = make(map[*core.Node]js.Value)
@@ -289,6 +294,8 @@ func (p *Pipeline) createDOMTree(node *core.Node, parentElement js.Value) {
 	if node.Widget == nil {
 		return
 	}
+	
+	println("[DOM-CREATE] Creating element for:", node.ID)
 
 	doc := js.Global().Get("document")
 	var elem js.Value
@@ -297,11 +304,15 @@ func (p *Pipeline) createDOMTree(node *core.Node, parentElement js.Value) {
 	switch widget := node.Widget.(type) {
 	case *widgets.Text:
 		elem = doc.Call("createElement", "span")
-		elem.Set("textContent", widget.GetText())
+		text := widget.GetText()
+		elem.Set("textContent", text)
+		println("[DOM-CREATE] Text widget with content:", text)
 
 	case *widgets.Button:
 		elem = doc.Call("createElement", "button")
-		elem.Set("textContent", widget.GetLabel())
+		label := widget.GetLabel()
+		elem.Set("textContent", label)
+		println("[DOM-CREATE] Button widget with label:", label)
 		
 		// Register callback without js.FuncOf
 		callbackID := RegisterCallback(widget.Click)

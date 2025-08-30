@@ -76,12 +76,36 @@ func (p *Pipeline) setupStages() {
 			},
 		},
 		{
-			ID:   "calculate-sizes",
-			Name: "Calculate Widget Sizes",
+			ID:   "measure-content",
+			Name: "Measure Content Sizes",
 			Execute: func(ctx context.Context, stageCtx *workflow.StageContext) error {
-				// Use PostOrderDFS for bottom-up calculation
+				// First pass: measure intrinsic content sizes bottom-up
 				for node := range p.tree.PostOrderDFS() {
-					p.calculateNodeSize(node)
+					p.measureContentSize(node)
+				}
+				stageCtx.Output = p.tree
+				return nil
+			},
+		},
+		{
+			ID:   "distribute-width",
+			Name: "Distribute Width",
+			Execute: func(ctx context.Context, stageCtx *workflow.StageContext) error {
+				// Second pass: distribute width top-down
+				for node := range p.tree.PreOrderDFS() {
+					p.distributeAlongAxis(node, true) // true = X axis
+				}
+				stageCtx.Output = p.tree
+				return nil
+			},
+		},
+		{
+			ID:   "distribute-height",
+			Name: "Distribute Height",
+			Execute: func(ctx context.Context, stageCtx *workflow.StageContext) error {
+				// Third pass: distribute height top-down
+				for node := range p.tree.PreOrderDFS() {
+					p.distributeAlongAxis(node, false) // false = Y axis
 				}
 				stageCtx.Output = p.tree
 				return nil
@@ -91,7 +115,7 @@ func (p *Pipeline) setupStages() {
 			ID:   "assign-positions",
 			Name: "Assign Positions",
 			Execute: func(ctx context.Context, stageCtx *workflow.StageContext) error {
-				// Use PreOrderDFS for top-down positioning
+				// Fourth pass: position elements
 				for node := range p.tree.PreOrderDFS() {
 					p.assignNodePosition(node)
 				}
@@ -117,12 +141,16 @@ func (p *Pipeline) setupStages() {
 
 	// Setup dependencies in graph
 	p.dependencies.AddNode(graph.NodeID("mark-dirty"), nil)
-	p.dependencies.AddNode(graph.NodeID("calculate-sizes"), nil)
+	p.dependencies.AddNode(graph.NodeID("measure-content"), nil)
+	p.dependencies.AddNode(graph.NodeID("distribute-width"), nil)
+	p.dependencies.AddNode(graph.NodeID("distribute-height"), nil)
 	p.dependencies.AddNode(graph.NodeID("assign-positions"), nil)
 	p.dependencies.AddNode(graph.NodeID("commit-dom"), nil)
 
-	p.dependencies.AddEdge(graph.NodeID("mark-dirty"), graph.NodeID("calculate-sizes"), 1.0)
-	p.dependencies.AddEdge(graph.NodeID("calculate-sizes"), graph.NodeID("assign-positions"), 1.0)
+	p.dependencies.AddEdge(graph.NodeID("mark-dirty"), graph.NodeID("measure-content"), 1.0)
+	p.dependencies.AddEdge(graph.NodeID("measure-content"), graph.NodeID("distribute-width"), 1.0)
+	p.dependencies.AddEdge(graph.NodeID("distribute-width"), graph.NodeID("distribute-height"), 1.0)
+	p.dependencies.AddEdge(graph.NodeID("distribute-height"), graph.NodeID("assign-positions"), 1.0)
 	p.dependencies.AddEdge(graph.NodeID("assign-positions"), graph.NodeID("commit-dom"), 1.0)
 }
 
@@ -165,17 +193,19 @@ func (p *Pipeline) propagateDirty(node *core.Node) {
 	}
 }
 
-// calculateNodeSize calculates size based on widget type and children
-func (p *Pipeline) calculateNodeSize(node *core.Node) {
+// measureContentSize measures intrinsic content size bottom-up
+func (p *Pipeline) measureContentSize(node *core.Node) {
 	if node.Widget == nil {
 		return
 	}
 
+	// First measure content size without considering parent constraints
 	switch w := node.Widget.(type) {
 	case *widgets.Column:
-		// Vertical layout: sum heights, max width
+		// Sum up children heights and find max width
 		totalHeight := 0.0
 		maxWidth := 0.0
+		
 		for i, child := range node.Children {
 			totalHeight += child.Bounds.Height
 			if i > 0 {
@@ -185,13 +215,15 @@ func (p *Pipeline) calculateNodeSize(node *core.Node) {
 				maxWidth = child.Bounds.Width
 			}
 		}
+		
 		node.Bounds.Width = maxWidth
 		node.Bounds.Height = totalHeight
 
 	case *widgets.Row:
-		// Horizontal layout: sum widths, max height
+		// Sum up children widths and find max height
 		totalWidth := 0.0
 		maxHeight := 0.0
+		
 		for i, child := range node.Children {
 			totalWidth += child.Bounds.Width
 			if i > 0 {
@@ -201,20 +233,117 @@ func (p *Pipeline) calculateNodeSize(node *core.Node) {
 				maxHeight = child.Bounds.Height
 			}
 		}
+		
 		node.Bounds.Width = totalWidth
 		node.Bounds.Height = maxHeight
 
 	default:
-		// Regular widget uses its own layout
+		// Regular widget uses its own layout for content measurement
 		constraints := core.Constraints{
 			MinWidth:  0,
-			MaxWidth:  800,
+			MaxWidth:  999999,
 			MinHeight: 0,
-			MaxHeight: 600,
+			MaxHeight: 999999,
 		}
 		width, height := w.Layout(constraints)
 		node.Bounds.Width = width
 		node.Bounds.Height = height
+	}
+}
+
+// distributeAlongAxis distributes available space along an axis
+func (p *Pipeline) distributeAlongAxis(node *core.Node, xAxis bool) {
+	if node.Widget == nil {
+		return
+	}
+
+	// Get parent dimensions
+	parentWidth := 800.0  // Default viewport width
+	parentHeight := 600.0 // Default viewport height
+	if node.Parent != nil && node.Parent.Value() != nil {
+		parent := node.Parent.Value()
+		parentWidth = parent.Bounds.Width
+		parentHeight = parent.Bounds.Height
+	}
+	_ = parentHeight // Will be used for Y-axis distribution
+
+	switch node.Widget.(type) {
+	case *widgets.Column:
+		if !xAxis {
+			// Vertical layout distributes height on Y axis
+			fixedHeight := 0.0
+			
+			// Sum fixed heights (no GROW on Y axis in Column for now)
+			for i, child := range node.Children {
+				fixedHeight += child.Bounds.Height
+				if i > 0 {
+					fixedHeight += 10 // gap
+				}
+			}
+			
+			node.Bounds.Height = fixedHeight
+		} else {
+			// On X axis, Column children fill available width
+			for _, child := range node.Children {
+				// Containers should fill parent width
+				if _, ok := child.Widget.(*widgets.Container); ok {
+					child.Bounds.Width = parentWidth
+				}
+			}
+			node.Bounds.Width = parentWidth
+		}
+
+	case *widgets.Row:
+		if xAxis {
+			// Horizontal layout distributes width on X axis
+			growCount := 0
+			fixedWidth := 0.0
+			
+			// Count GROW children and sum fixed widths
+			for i, child := range node.Children {
+				// Containers in Row should GROW
+				if _, ok := child.Widget.(*widgets.Container); ok {
+					growCount++
+				} else {
+					fixedWidth += child.Bounds.Width
+				}
+				if i > 0 {
+					fixedWidth += 10 // gap
+				}
+			}
+			
+			// Distribute remaining space to GROW children
+			if growCount > 0 && parentWidth > fixedWidth {
+				remainingWidth := parentWidth - fixedWidth
+				growWidth := remainingWidth / float64(growCount)
+				
+				for _, child := range node.Children {
+					if _, ok := child.Widget.(*widgets.Container); ok {
+						child.Bounds.Width = growWidth
+					}
+				}
+			}
+			node.Bounds.Width = parentWidth
+		} else {
+			// On Y axis, Row children share max height
+			maxHeight := 0.0
+			for _, child := range node.Children {
+				if child.Bounds.Height > maxHeight {
+					maxHeight = child.Bounds.Height
+				}
+			}
+			node.Bounds.Height = maxHeight
+		}
+
+	case *widgets.Container:
+		// Containers can GROW to fill parent space
+		if xAxis {
+			node.Bounds.Width = parentWidth
+		}
+		// Height stays as measured content
+
+	default:
+		// Other widgets keep their measured size
 	}
 }
 

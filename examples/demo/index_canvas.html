@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Maya - Canvas Renderer</title>
+</head>
+<body>
+
+    <script src="wasm_exec.js"></script>
+    <script>
+        const go = new Go();
+        
+        // Set renderer type before loading WASM
+        window.MAYA_RENDERER = 'canvas';
+        
+        WebAssembly.instantiateStreaming(fetch("app.wasm"), go.importObject).then((result) => {
+            window.wasmInstance = result.instance;
+            window.wasmExports = result.instance.exports;
+            go.run(result.instance);
+        });
+    </script>
+</body>
+</html>

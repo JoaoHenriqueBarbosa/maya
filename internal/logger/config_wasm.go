@@ -7,6 +7,8 @@ package logger
 // DO NOT EDIT MANUALLY
 
 func initConfig() {
-	currentLevel = LevelSilent
-	categories = map[string]bool{}
+	currentLevel = LevelTrace
+	categories = map[string]bool{
+		"PIPELINE": true,
+	}
 }

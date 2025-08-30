@@ -277,15 +277,19 @@ func (p *Pipeline) assignNodePosition(node *core.Node) {
 
 // commitToDOM renders the tree to the DOM
 func (p *Pipeline) commitToDOM() {
-	println("[DOM-COMMIT] Clearing and rebuilding DOM...")
-	
-	// Clear container and mapping
-	p.container.Set("innerHTML", "")
-	p.nodeElements = make(map[*core.Node]js.Value)
-	
-	// Build DOM from tree recursively
-	if root := p.tree.GetRoot(); root != nil {
-		p.createDOMTree(root, p.container)
+	// Check if this is initial render or update
+	if len(p.nodeElements) == 0 {
+		println("[DOM-COMMIT] Initial render - creating DOM elements...")
+		// Build DOM from tree recursively
+		if root := p.tree.GetRoot(); root != nil {
+			p.createDOMTree(root, p.container)
+		}
+	} else {
+		println("[DOM-COMMIT] Update render - patching existing DOM...")
+		// Update existing DOM elements
+		if root := p.tree.GetRoot(); root != nil {
+			p.updateDOMTree(root)
+		}
 	}
 }
 
@@ -356,6 +360,57 @@ func (p *Pipeline) createDOMTree(node *core.Node, parentElement js.Value) {
 	// Recursively create children
 	for _, child := range node.Children {
 		p.createDOMTree(child, elem)
+	}
+}
+
+// updateDOMTree updates existing DOM elements without recreating them
+func (p *Pipeline) updateDOMTree(node *core.Node) {
+	if node.Widget == nil {
+		return
+	}
+	
+	// Get existing DOM element
+	elem, exists := p.nodeElements[node]
+	if !exists {
+		println("[DOM-UPDATE] WARNING: No DOM element found for node:", node.ID)
+		return
+	}
+	
+	// Update content based on widget type
+	switch widget := node.Widget.(type) {
+	case *widgets.Text:
+		newText := widget.GetText()
+		currentText := elem.Get("textContent").String()
+		if newText != currentText {
+			println("[DOM-UPDATE] Updating text from", currentText, "to", newText)
+			elem.Set("textContent", newText)
+		}
+		
+	case *widgets.Button:
+		newLabel := widget.GetLabel()
+		currentLabel := elem.Get("textContent").String()
+		if newLabel != currentLabel {
+			println("[DOM-UPDATE] Updating button label from", currentLabel, "to", newLabel)
+			elem.Set("textContent", newLabel)
+		}
+	}
+	
+	// Update position if changed
+	if node.IsDirty() {
+		style := elem.Get("style")
+		style.Set("left", fmt.Sprintf("%fpx", node.Bounds.X))
+		style.Set("top", fmt.Sprintf("%fpx", node.Bounds.Y))
+		if node.Bounds.Width > 0 {
+			style.Set("width", fmt.Sprintf("%fpx", node.Bounds.Width))
+		}
+		if node.Bounds.Height > 0 {
+			style.Set("height", fmt.Sprintf("%fpx", node.Bounds.Height))
+		}
+	}
+	
+	// Recursively update children
+	for _, child := range node.Children {
+		p.updateDOMTree(child)
 	}
 }
 

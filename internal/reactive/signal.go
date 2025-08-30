@@ -22,11 +22,35 @@ type Signal[T any] struct {
 
 // NewSignal creates a new signal with an initial value
 func NewSignal[T any](initial T) *Signal[T] {
-	return &Signal[T]{
+	s := &Signal[T]{
 		value:     initial,
 		observers: make(map[uint64]*Effect),
 		equals:    nil, // Default to always update
 	}
+	
+	// Add default equality check for comparable types
+	switch any(initial).(type) {
+	case bool:
+		s.equals = func(a, b T) bool {
+			aBool, aOk := any(a).(bool)
+			bBool, bOk := any(b).(bool)
+			return aOk && bOk && aBool == bBool
+		}
+	case int:
+		s.equals = func(a, b T) bool {
+			aInt, aOk := any(a).(int)
+			bInt, bOk := any(b).(int)
+			return aOk && bOk && aInt == bInt
+		}
+	case string:
+		s.equals = func(a, b T) bool {
+			aStr, aOk := any(a).(string)
+			bStr, bOk := any(b).(string)
+			return aOk && bOk && aStr == bStr
+		}
+	}
+	
+	return s
 }
 
 // NewSignalWithEquals creates a signal with custom equality checking

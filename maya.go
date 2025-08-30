@@ -30,6 +30,7 @@ type App struct {
 	cancel       context.CancelFunc
 	root         Component        // Root component for re-rendering
 	renderEffect *reactive.Effect // Single effect for re-rendering
+	widgetElements map[widgets.WidgetImpl]js.Value // Direct widget->DOM mapping for fine-grained updates
 }
 
 // New creates a new Maya application - SIMPLE API
@@ -42,6 +43,7 @@ func New(root Component) *App {
 		ctx:     ctx,
 		cancel:  cancel,
 		root:    root,
+		widgetElements: make(map[widgets.WidgetImpl]js.Value),
 	}
 
 	// Build widget and convert to tree

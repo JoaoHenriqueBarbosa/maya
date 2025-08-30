@@ -254,24 +254,21 @@ func Signal[T comparable](initial T) *reactive.Signal[T] {
 	return reactive.NewSignal(initial)
 }
 
-// TextSignal creates a truly reactive text widget using Memo
+// TextSignal creates a truly reactive text widget
 func TextSignal[T any](signal *reactive.Signal[T], format func(T) string) widgets.WidgetImpl {
 	id := fmt.Sprintf("reactive-text-%p", signal)
 	
-	// Use Memo for cached reactive computation
-	computedText := reactive.NewMemo(func() string {
-		value := format(signal.Get())
-		println("[TEXT-SIGNAL] Computing text value:", value)
-		return value
-	})
-	
-	// Create text widget with computed value
-	text := widgets.NewText(id, computedText.Get())
+	// Create text widget with initial value (without tracking)
+	initialValue := format(signal.Peek())
+	text := widgets.NewText(id, initialValue)
+	println("[TEXT-SIGNAL] Created widget with initial value:", initialValue)
 	
 	// Create effect that updates ONLY this widget's text
-	reactive.CreateEffect(func() {
-		newValue := computedText.Get()
-		println("[TEXT-SIGNAL] Updating widget text to:", newValue)
+	// This effect will track the signal dependency on first run
+	effect := reactive.CreateEffect(func() {
+		// This Get() will register this effect as an observer
+		newValue := format(signal.Get())
+		println("[TEXT-SIGNAL] Effect updating widget text to:", newValue)
 		text.SetText(newValue)
 		
 		// Mark this specific widget for repaint
@@ -280,11 +277,13 @@ func TextSignal[T any](signal *reactive.Signal[T], format func(T) string) widget
 		// Schedule selective DOM update
 		if globalApp != nil && globalApp.batcher != nil {
 			globalApp.batcher.Add(func() {
-				println("[TEXT-SIGNAL] Selective DOM update for:", id)
+				println("[TEXT-SIGNAL] Batched DOM update for:", id)
 				globalApp.updateWidget(text)
 			})
 		}
 	})
+	
+	println("[TEXT-SIGNAL] Effect created with ID:", effect)
 	
 	return text
 }

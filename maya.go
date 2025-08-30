@@ -13,6 +13,9 @@ import (
 	"github.com/maya-framework/maya/internal/widgets"
 )
 
+// Global app instance for reactive updates
+var globalApp *App
+
 // Component is a function that returns a widget
 type Component func() widgets.WidgetImpl
 
@@ -24,6 +27,7 @@ type App struct {
 	container js.Value
 	ctx       context.Context
 	cancel    context.CancelFunc
+	root      Component               // Root component for re-rendering
 }
 
 // New creates a new Maya application - SIMPLE API
@@ -35,6 +39,7 @@ func New(root Component) *App {
 		batcher: reactive.NewUpdateBatcher(),
 		ctx:     ctx,
 		cancel:  cancel,
+		root:    root,
 	}
 	
 	// Build widget and convert to tree
@@ -47,6 +52,9 @@ func New(root Component) *App {
 
 // Run starts the application
 func (app *App) Run() {
+	// Set global app for reactive updates
+	globalApp = app
+	
 	// Wait for DOM
 	waitForDOM(func() {
 		app.setupViewport()
@@ -85,9 +93,25 @@ func (app *App) Run() {
 
 // render executes the pipeline
 func (app *App) render() {
+	println("Re-rendering application...")
+	
+	// Rebuild the widget tree
+	rootWidget := app.root()
+	rootNode := app.widgetToNode(rootWidget)
+	app.tree.SetRoot(rootNode)
+	
+	// Execute the render pipeline
 	if err := app.pipeline.Execute(app.ctx); err != nil {
 		println("Render error:", err.Error())
 	}
+}
+
+// scheduleRender schedules a render using the batcher
+func (app *App) scheduleRender() {
+	println("Scheduling render via batcher...")
+	app.batcher.Add(func() {
+		app.render()
+	})
 }
 
 // widgetToNode converts a widget to a core.Node recursively
@@ -215,7 +239,10 @@ func TextSignal[T any](signal *reactive.Signal[T], format func(T) string) widget
 	// Create effect to update text when signal changes
 	reactive.CreateEffect(func() {
 		text.SetText(format(signal.Get()))
-		// TODO: Trigger re-render
+		// Trigger re-render if app is running
+		if globalApp != nil {
+			globalApp.scheduleRender()
+		}
 	})
 	
 	return text

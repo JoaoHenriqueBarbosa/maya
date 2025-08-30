@@ -73,10 +73,31 @@ func (app *App) Run() {
 		}
 
 		app.container = container
-		container.Set("innerHTML", "")
+		
+		// Determine renderer type from window.MAYA_RENDERER
+		rendererType := "dom" // default
+		if rt := js.Global().Get("window").Get("MAYA_RENDERER"); !rt.IsUndefined() {
+			rendererType = rt.String()
+		}
+		
+		// Create appropriate renderer
+		var renderer render.Renderer
+		switch rendererType {
+		case "canvas":
+			renderer = render.NewCanvasRenderer()
+		default:
+			renderer = render.NewDOMRenderer()
+		}
+		
+		// Initialize renderer with container
+		if err := renderer.Init(container); err != nil {
+			panic(fmt.Sprintf("Failed to initialize renderer: %v", err))
+		}
+		
+		println("[MAYA] Using renderer:", renderer.Name())
 
-		// Create pipeline with our REAL components
-		app.pipeline = render.NewPipeline(app.tree, container, &render.Theme{
+		// Create pipeline with our REAL components and selected renderer
+		app.pipeline = render.NewPipeline(app.tree, renderer, &render.Theme{
 			Primary:    "#007acc",
 			Text:       "#333333",
 			Background: "#ffffff",

@@ -6,7 +6,6 @@ package render
 import (
 	"context"
 	"fmt"
-	"syscall/js"
 
 	"github.com/maya-framework/maya/internal/core"
 	"github.com/maya-framework/maya/internal/graph"
@@ -25,14 +24,15 @@ type Pipeline struct {
 	// Reference to the REAL tree
 	tree *core.Tree
 
-	// DOM container
-	container js.Value
+	// Renderer abstraction - THE ONLY WAY TO RENDER
+	renderer Renderer
 
 	// Theme
 	theme *Theme
 	
-	// Node to DOM element mapping
-	nodeElements map[*core.Node]js.Value
+	// Track previous commands for selective updates
+	previousCommands []PaintCommand
+	firstRender bool
 }
 
 // Theme for styling
@@ -43,15 +43,15 @@ type Theme struct {
 	FontFamily string
 }
 
-// NewPipeline creates a new rendering pipeline using existing components
-func NewPipeline(tree *core.Tree, container js.Value, theme *Theme) *Pipeline {
+// NewPipeline creates a new rendering pipeline with a specific renderer
+func NewPipeline(tree *core.Tree, renderer Renderer, theme *Theme) *Pipeline {
 	p := &Pipeline{
 		engine:       workflow.NewWorkflowEngine("render-pipeline"),
 		dependencies: graph.NewGraph(),
 		tree:         tree,
-		container:    container,
+		renderer:     renderer,
 		theme:        theme,
-		nodeElements: make(map[*core.Node]js.Value),
+		firstRender:  true,
 	}
 
 	p.setupStages()
@@ -249,9 +249,9 @@ func (p *Pipeline) assignNodePosition(node *core.Node) {
 	// Calculate position based on parent's layout type
 	switch parent.Widget.(type) {
 	case *widgets.Column:
-		// Vertical layout
-		node.Bounds.X = parent.Bounds.X
-		node.Bounds.Y = parent.Bounds.Y
+		// Vertical layout - children start at 0,0 relative to parent
+		node.Bounds.X = 0
+		node.Bounds.Y = 0
 
 		// Add offset from previous siblings
 		for i := 0; i < childIndex; i++ {
@@ -259,9 +259,9 @@ func (p *Pipeline) assignNodePosition(node *core.Node) {
 		}
 
 	case *widgets.Row:
-		// Horizontal layout
-		node.Bounds.X = parent.Bounds.X
-		node.Bounds.Y = parent.Bounds.Y
+		// Horizontal layout - children start at 0,0 relative to parent
+		node.Bounds.X = 0
+		node.Bounds.Y = 0
 
 		// Add offset from previous siblings
 		for i := 0; i < childIndex; i++ {
@@ -269,219 +269,74 @@ func (p *Pipeline) assignNodePosition(node *core.Node) {
 		}
 
 	default:
-		// Default positioning
-		node.Bounds.X = parent.Bounds.X
-		node.Bounds.Y = parent.Bounds.Y
+		// Default positioning - relative to parent
+		node.Bounds.X = 0
+		node.Bounds.Y = 0
 	}
 }
 
-// commitToDOM renders the tree to the DOM
+// commitToDOM renders the tree using the abstract renderer
 func (p *Pipeline) commitToDOM() {
-	// Check if this is initial render or update
-	if len(p.nodeElements) == 0 {
-		println("[DOM-COMMIT] Initial render - creating DOM elements...")
-		// Build DOM from tree recursively
-		if root := p.tree.GetRoot(); root != nil {
-			p.createDOMTree(root, p.container)
-		}
-	} else {
-		println("[DOM-COMMIT] Update render - patching existing DOM...")
-		// Update existing DOM elements
-		if root := p.tree.GetRoot(); root != nil {
-			p.updateDOMTree(root)
-		}
-	}
-}
-
-// createDOMTree creates DOM elements recursively
-func (p *Pipeline) createDOMTree(node *core.Node, parentElement js.Value) {
-	if node.Widget == nil {
-		return
-	}
+	println("[RENDER-COMMIT] Rendering with:", p.renderer.Name())
 	
-	println("[DOM-CREATE] Creating element for:", node.ID)
-
-	doc := js.Global().Get("document")
-	var elem js.Value
-
-	// Create appropriate element based on widget type
-	switch widget := node.Widget.(type) {
-	case *widgets.Text:
-		elem = doc.Call("createElement", "span")
-		text := widget.GetText()
-		elem.Set("textContent", text)
-		println("[DOM-CREATE] Text widget with content:", text)
-
-	case *widgets.Button:
-		elem = doc.Call("createElement", "button")
-		label := widget.GetLabel()
-		elem.Set("textContent", label)
-		println("[DOM-CREATE] Button widget with label:", label)
+	if root := p.tree.GetRoot(); root != nil {
+		// Convert tree to paint commands
+		commands := ConvertNodeToCommands(root, 0, 0)
 		
-		// Register callback without js.FuncOf
-		callbackID := RegisterCallback(widget.Click)
-		
-		// Set onclick to call our exported function from WASM exports
-		elem.Set("onclick", js.Global().Get("Function").New(
-			"return window.wasmExports.handleEvent("+fmt.Sprintf("%d", callbackID)+");",
-		))
-
-	case *widgets.Container, *widgets.Column, *widgets.Row:
-		elem = doc.Call("createElement", "div")
-
-	default:
-		elem = doc.Call("createElement", "div")
-	}
-
-	// Apply calculated positioning
-	style := elem.Get("style")
-	style.Set("position", "absolute")
-	style.Set("left", fmt.Sprintf("%fpx", node.Bounds.X))
-	style.Set("top", fmt.Sprintf("%fpx", node.Bounds.Y))
-
-	if node.Bounds.Width > 0 {
-		style.Set("width", fmt.Sprintf("%fpx", node.Bounds.Width))
-	}
-	if node.Bounds.Height > 0 {
-		style.Set("height", fmt.Sprintf("%fpx", node.Bounds.Height))
-	}
-
-	// Apply theme styles
-	if widgetImpl, ok := node.Widget.(widgets.WidgetImpl); ok {
-		p.applyThemeStyles(elem, widgetImpl)
-	}
-
-	// Append to parent element
-	parentElement.Call("appendChild", elem)
-	
-	// Store mapping
-	p.nodeElements[node] = elem
-	
-	// Recursively create children
-	for _, child := range node.Children {
-		p.createDOMTree(child, elem)
-	}
-}
-
-// updateDOMTree updates existing DOM elements without recreating them
-func (p *Pipeline) updateDOMTree(node *core.Node) {
-	if node.Widget == nil {
-		return
-	}
-	
-	// Get existing DOM element
-	elem, exists := p.nodeElements[node]
-	if !exists {
-		println("[DOM-UPDATE] WARNING: No DOM element found for node:", node.ID)
-		return
-	}
-	
-	// Update content based on widget type
-	switch widget := node.Widget.(type) {
-	case *widgets.Text:
-		newText := widget.GetText()
-		currentText := elem.Get("textContent").String()
-		if newText != currentText {
-			println("[DOM-UPDATE] Updating text from", currentText, "to", newText)
-			elem.Set("textContent", newText)
-		}
-		
-	case *widgets.Button:
-		newLabel := widget.GetLabel()
-		currentLabel := elem.Get("textContent").String()
-		if newLabel != currentLabel {
-			println("[DOM-UPDATE] Updating button label from", currentLabel, "to", newLabel)
-			elem.Set("textContent", newLabel)
-		}
-	}
-	
-	// Update position if changed
-	if node.IsDirty() {
-		style := elem.Get("style")
-		style.Set("left", fmt.Sprintf("%fpx", node.Bounds.X))
-		style.Set("top", fmt.Sprintf("%fpx", node.Bounds.Y))
-		if node.Bounds.Width > 0 {
-			style.Set("width", fmt.Sprintf("%fpx", node.Bounds.Width))
-		}
-		if node.Bounds.Height > 0 {
-			style.Set("height", fmt.Sprintf("%fpx", node.Bounds.Height))
-		}
-	}
-	
-	// Recursively update children
-	for _, child := range node.Children {
-		p.updateDOMTree(child)
-	}
-}
-
-// applyThemeStyles applies visual styles based on widget type and RenderObject
-func (p *Pipeline) applyThemeStyles(elem js.Value, widget widgets.WidgetImpl) {
-	style := elem.Get("style")
-	
-	// Try to get render object for advanced styling
-	if builder, ok := widget.(interface{ Build(context.Context) widgets.RenderObject }); ok {
-		renderObj := builder.Build(context.Background())
-		
-		// Check for decorated box
-		if decorated, ok := renderObj.(*widgets.RenderDecoratedBox); ok {
-			decoration := decorated.Decoration
-			
-			// Apply background
-			if decoration.Color.A > 0 {
-				style.Set("backgroundColor", fmt.Sprintf("rgba(%d,%d,%d,%f)", 
-					decoration.Color.R, 
-					decoration.Color.G, 
-					decoration.Color.B,
-					float64(decoration.Color.A)/255.0))
+		if p.firstRender {
+			// First render: full paint
+			p.renderer.BeginFrame()
+			for _, cmd := range commands {
+				p.renderer.Paint(cmd)
 			}
+			p.renderer.EndFrame()
 			
-			// Apply border
-			if decoration.BorderWidth > 0 && decoration.BorderColor.A > 0 {
-				style.Set("borderWidth", fmt.Sprintf("%fpx", decoration.BorderWidth))
-				style.Set("borderStyle", "solid")
-				style.Set("borderColor", fmt.Sprintf("rgba(%d,%d,%d,%f)",
-					decoration.BorderColor.R,
-					decoration.BorderColor.G,
-					decoration.BorderColor.B,
-					float64(decoration.BorderColor.A)/255.0))
-				
-				if decoration.BorderRadius > 0 {
-					style.Set("borderRadius", fmt.Sprintf("%fpx", decoration.BorderRadius))
+			p.previousCommands = commands
+			p.firstRender = false
+		} else {
+			// Subsequent renders: let renderer decide how to handle updates
+			updates := p.findUpdates(commands)
+			
+			if len(updates) > 0 {
+				// Let renderer decide if it can handle selective updates
+				if !p.renderer.ApplyUpdates(updates, commands) {
+					// Renderer needs full redraw
+					p.renderer.BeginFrame()
+					for _, cmd := range commands {
+						p.renderer.Paint(cmd)
+					}
+					p.renderer.EndFrame()
 				}
 			}
 			
-			// Apply box shadow
-			if decoration.BoxShadow != nil {
-				shadow := decoration.BoxShadow
-				style.Set("boxShadow", fmt.Sprintf("%fpx %fpx %fpx rgba(%d,%d,%d,%f)",
-					shadow.Offset.X,
-					shadow.Offset.Y,
-					shadow.BlurRadius,
-					shadow.Color.R,
-					shadow.Color.G,
-					shadow.Color.B,
-					float64(shadow.Color.A)/255.0))
-			}
-			
-			return // Decorated styles applied, skip default theme
+			p.previousCommands = commands
 		}
 	}
-
-	// Default theme styles based on widget type
-	switch widget.(type) {
-	case *widgets.Text:
-		style.Set("color", p.theme.Text)
-		style.Set("fontSize", "16px")
-		style.Set("fontFamily", p.theme.FontFamily)
-
-	case *widgets.Button:
-		style.Set("backgroundColor", p.theme.Primary)
-		style.Set("color", "white")
-		style.Set("border", "none")
-		style.Set("borderRadius", "5px")
-		style.Set("cursor", "pointer")
-		style.Set("fontSize", "14px")
-		style.Set("fontFamily", p.theme.FontFamily)
-		style.Set("textAlign", "center")
-	}
 }
+
+// findUpdates compares commands to find what changed
+func (p *Pipeline) findUpdates(newCommands []PaintCommand) []PaintCommand {
+	var updates []PaintCommand
+	
+	// Create map of previous commands for quick lookup
+	prevMap := make(map[string]PaintCommand)
+	for _, cmd := range p.previousCommands {
+		prevMap[cmd.ID] = cmd
+	}
+	
+	// Find changed commands
+	for _, newCmd := range newCommands {
+		if prevCmd, exists := prevMap[newCmd.ID]; exists {
+			// Check if text changed
+			if newCmd.Type == PaintText && newCmd.Text != prevCmd.Text {
+				println("[UPDATE] Text changed for", newCmd.ID, "from", prevCmd.Text, "to", newCmd.Text)
+				newCmd.Type = UpdateText // Mark as update
+				updates = append(updates, newCmd)
+			}
+			// Add more change detection as needed
+		}
+	}
+	
+	return updates
+}
+

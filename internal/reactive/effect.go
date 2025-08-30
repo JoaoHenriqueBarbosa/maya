@@ -69,6 +69,7 @@ func CreateEffectWithOptions(fn func(), opts EffectOptions) *Effect {
 // run executes the effect function
 func (e *Effect) run() {
 	if !e.active.Load() {
+		println("[EFFECT] Effect", e.id, "is not active, skipping run")
 		return
 	}
 	
@@ -91,15 +92,20 @@ func (e *Effect) run() {
 	
 	// Push to effect stack for dependency tracking
 	pushEffect(e)
-	defer popEffect()
+	println("[EFFECT] Pushed effect", e.id, "to stack")
+	defer func() {
+		popEffect()
+		println("[EFFECT] Popped effect", e.id, "from stack")
+	}()
 	
 	// Run cleanups from previous run
 	e.runCleanups()
 	
 	// Execute the effect function
+	println("[EFFECT] About to execute fn for effect", e.id)
 	e.fn()
 	
-	println("[EFFECT] Effect completed, now tracking", len(e.dependencies), "dependencies")
+	println("[EFFECT] Effect", e.id, "completed, now tracking", len(e.dependencies), "dependencies")
 }
 
 // invalidate marks the effect as needing re-execution

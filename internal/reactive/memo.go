@@ -18,29 +18,37 @@ type Memo[T any] struct {
 	// Weak cache for memory efficiency
 	weakCache    *weak.Pointer[T]
 	
-	// Dependencies
+	// Dependencies and observers
 	effect       *Effect
 	dependencies []SignalInterface
 	depmu        sync.RWMutex
+	observers    map[uint64]*Effect // Effects watching this memo
+	obsmu        sync.RWMutex
 }
 
 // NewMemo creates a new memoized computation
 func NewMemo[T any](compute func() T) *Memo[T] {
+	println("[MEMO-NEW] Creating new memo")
 	m := &Memo[T]{
-		compute: compute,
+		compute:   compute,
+		observers: make(map[uint64]*Effect),
 	}
 	
 	// Mark as stale initially to force first computation
 	m.stale.Store(true)
 	
-	// Create effect that marks memo as stale when dependencies change
-	m.effect = CreateEffectWithOptions(func() {
-		// This runs in tracking context, capturing dependencies
-		_ = m.recompute()
-	}, EffectOptions{
-		Immediate: false, // Don't run immediately
-		Defer:     true,  // Defer updates
-	})
+	// Do initial computation to capture dependencies
+	// This will set up the effect that watches the signals
+	println("[MEMO-NEW] Doing initial computation")
+	defer func() {
+		if r := recover(); r != nil {
+			println("[MEMO-NEW] Panic during initial computation:", r)
+		}
+	}()
+	
+	// Force initial computation to set up dependencies
+	m.recompute()
+	println("[MEMO-NEW] Initial computation complete")
 	
 	return m
 }
@@ -49,9 +57,17 @@ func NewMemo[T any](compute func() T) *Memo[T] {
 func (m *Memo[T]) Get() T {
 	// Check if we're tracking dependencies
 	if current := getCurrentEffect(); current != nil {
-		// Add this memo as a dependency
-		// This ensures the effect re-runs when the memo changes
-		m.trackAsSignal(current)
+		// Register this effect as an observer of the memo
+		m.obsmu.Lock()
+		m.observers[current.id] = current
+		m.obsmu.Unlock()
+		
+		// Also track in the effect's dependencies
+		current.depmu.Lock()
+		current.dependencies[m] = m.version.Load()
+		current.depmu.Unlock()
+		
+		println("[MEMO] Registered observer effect", current.id)
 	}
 	
 	// Fast path: check if cached and not stale
@@ -59,10 +75,12 @@ func (m *Memo[T]) Get() T {
 		m.mu.RLock()
 		value := m.cached
 		m.mu.RUnlock()
+		println("[MEMO] Returning cached value")
 		return value
 	}
 	
 	// Slow path: recompute
+	println("[MEMO] Recomputing stale value")
 	return m.recompute()
 }
 
@@ -92,25 +110,39 @@ func (m *Memo[T]) recompute() T {
 	m.clearDependencies()
 	
 	// Track new dependencies during computation
-	var newDeps []SignalInterface
 	var value T
 	
-	// Create temporary effect to capture dependencies
-	tempEffect := &Effect{
-		id:           effectCounter.Add(1),
-		dependencies: make(map[SignalInterface]uint64),
+	// Dispose old effect if exists
+	if m.effect != nil {
+		m.effect.Dispose()
 	}
 	
-	pushEffect(tempEffect)
-	value = m.compute()
-	popEffect()
+	// We need a flag to know if this is the first run
+	isFirstRun := true
 	
-	// Extract captured dependencies
-	tempEffect.depmu.RLock()
-	for dep := range tempEffect.dependencies {
-		newDeps = append(newDeps, dep)
-	}
-	tempEffect.depmu.RUnlock()
+	// Create an effect that both computes and responds to changes
+	memoEffect := CreateEffectWithOptions(func() {
+		if isFirstRun {
+			// First run: compute the value
+			println("[MEMO-EFFECT] First run, computing value")
+			value = m.compute()
+			isFirstRun = false
+		} else {
+			// Subsequent runs: mark as stale and notify
+			println("[MEMO-EFFECT] Dependencies changed, marking as stale")
+			m.stale.Store(true)
+			m.notifyObservers()
+		}
+	}, EffectOptions{
+		Immediate: true, // Run immediately to establish dependencies
+		Defer: false,
+	})
+	
+	// Store the effect for future cleanup
+	m.effect = memoEffect
+	
+	// The effect was already registered with signals during compute()
+	println("[MEMO] Effect registered with", len(memoEffect.dependencies), "dependencies")
 	
 	// Update cached value
 	m.mu.Lock()
@@ -125,14 +157,10 @@ func (m *Memo[T]) recompute() T {
 	}
 	m.mu.Unlock()
 	
-	// Update dependencies
-	m.depmu.Lock()
-	m.dependencies = newDeps
-	m.depmu.Unlock()
-	
-	// Register to watch these dependencies
-	// Note: This is simplified - in production we'd have a better way
-	// to handle different signal types
+	// Notify observers if value changed
+	// Note: This assumes T is comparable. For non-comparable types,
+	// we'd need a different approach
+	m.notifyObservers()
 	
 	return value
 }
@@ -165,6 +193,61 @@ func (m *Memo[T]) Dispose() {
 	}
 	m.clearDependencies()
 	m.weakCache = nil
+}
+
+// Implement SignalInterface for Memo
+func (m *Memo[T]) AddObserver(effect *Effect) {
+	m.obsmu.Lock()
+	defer m.obsmu.Unlock()
+	m.observers[effect.id] = effect
+}
+
+func (m *Memo[T]) RemoveObserver(effectID uint64) {
+	m.obsmu.Lock()
+	defer m.obsmu.Unlock()
+	delete(m.observers, effectID)
+}
+
+func (m *Memo[T]) GetVersion() uint64 {
+	return m.version.Load()
+}
+
+func (m *Memo[T]) Version() uint64 {
+	return m.version.Load()
+}
+
+// notifyObservers notifies all observers that the memo has changed
+func (m *Memo[T]) notifyObservers() {
+	m.obsmu.RLock()
+	observers := make([]*Effect, 0, len(m.observers))
+	for _, obs := range m.observers {
+		observers = append(observers, obs)
+	}
+	m.obsmu.RUnlock()
+	
+	for _, obs := range observers {
+		obs.Invalidate()
+	}
+}
+
+// Implement remaining SignalInterface methods
+func (m *Memo[T]) notify() {
+	m.notifyObservers()
+}
+
+func (m *Memo[T]) removeObserver(effect *Effect) {
+	m.RemoveObserver(effect.id)
+}
+
+func (m *Memo[T]) getObservers() []*Effect {
+	m.obsmu.RLock()
+	defer m.obsmu.RUnlock()
+	
+	observers := make([]*Effect, 0, len(m.observers))
+	for _, obs := range m.observers {
+		observers = append(observers, obs)
+	}
+	return observers
 }
 
 // Computed is an alias for Memo with automatic dependency tracking

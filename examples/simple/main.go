@@ -10,20 +10,29 @@ import (
 )
 
 func main() {
+	fmt.Println("========== Maya App Starting! ==========")
+	
 	// Create reactive state
 	counter := maya.Signal(0)
 	message := maya.Signal("Click the buttons!")
+	fmt.Println("Signals created")
 	
 	// Memo example - computed values that cache
 	doubled := maya.Memo(func() int {
 		fmt.Println("[MEMO] Computing doubled value...")
-		return counter.Get() * 2
+		value := counter.Get()
+		fmt.Printf("[MEMO] Counter value is %d, doubled is %d\n", value, value*2)
+		return value * 2
 	})
+	fmt.Println("Created doubled memo:", doubled)
 	
 	squared := maya.Memo(func() int {
 		fmt.Println("[MEMO] Computing squared value...")
-		return counter.Get() * counter.Get()
+		value := counter.Get()
+		fmt.Printf("[MEMO] Counter value is %d, squared is %d\n", value, value*value)
+		return value * value
 	})
+	fmt.Println("Created squared memo:", squared)
 	
 	// Computed example - derived state
 	analysis := maya.Computed(func() string {

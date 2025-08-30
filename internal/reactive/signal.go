@@ -67,6 +67,9 @@ func (s *Signal[T]) Get() T {
 		println("[SIGNAL] Tracking read by effect ID:", current.id)
 		s.addObserver(current)
 		current.addDependency(s)
+		println("[SIGNAL] Added effect", current.id, "as observer, now have", len(s.observers), "observers")
+	} else {
+		println("[SIGNAL] No current effect to track")
 	}
 	
 	s.mu.RLock()

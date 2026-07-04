@@ -29,10 +29,10 @@ type Pipeline struct {
 
 	// Theme
 	theme *Theme
-	
+
 	// Track previous commands for selective updates
 	previousCommands []PaintCommand
-	firstRender bool
+	firstRender      bool
 }
 
 // Theme for styling
@@ -127,8 +127,7 @@ func (p *Pipeline) setupStages() {
 
 // Execute runs the rendering pipeline
 func (p *Pipeline) Execute(ctx context.Context) error {
-	println("[PIPELINE] Starting execution...")
-	
+
 	// Get topological order from dependency graph
 	order, err := p.dependencies.TopologicalSort()
 	if err != nil {
@@ -144,7 +143,6 @@ func (p *Pipeline) Execute(ctx context.Context) error {
 	for _, nodeID := range order {
 		stageID := string(nodeID)
 		if stage, exists := p.engine.GetStage(stageID); exists {
-			println("[PIPELINE] Executing stage:", stageID)
 			stageCtx.Stage = stage
 			if err := stage.Execute(ctx, stageCtx); err != nil {
 				return fmt.Errorf("stage %s failed: %w", stageID, err)
@@ -277,12 +275,11 @@ func (p *Pipeline) assignNodePosition(node *core.Node) {
 
 // commitToDOM renders the tree using the abstract renderer
 func (p *Pipeline) commitToDOM() {
-	println("[RENDER-COMMIT] Rendering with:", p.renderer.Name())
-	
+
 	if root := p.tree.GetRoot(); root != nil {
 		// Convert tree to paint commands
 		commands := ConvertNodeToCommands(root, 0, 0)
-		
+
 		if p.firstRender {
 			// First render: full paint
 			p.renderer.BeginFrame()
@@ -290,13 +287,13 @@ func (p *Pipeline) commitToDOM() {
 				p.renderer.Paint(cmd)
 			}
 			p.renderer.EndFrame()
-			
+
 			p.previousCommands = commands
 			p.firstRender = false
 		} else {
 			// Subsequent renders: let renderer decide how to handle updates
 			updates := p.findUpdates(commands)
-			
+
 			if len(updates) > 0 {
 				// Let renderer decide if it can handle selective updates
 				if !p.renderer.ApplyUpdates(updates, commands) {
@@ -308,7 +305,7 @@ func (p *Pipeline) commitToDOM() {
 					p.renderer.EndFrame()
 				}
 			}
-			
+
 			p.previousCommands = commands
 		}
 	}
@@ -317,26 +314,24 @@ func (p *Pipeline) commitToDOM() {
 // findUpdates compares commands to find what changed
 func (p *Pipeline) findUpdates(newCommands []PaintCommand) []PaintCommand {
 	var updates []PaintCommand
-	
+
 	// Create map of previous commands for quick lookup
 	prevMap := make(map[string]PaintCommand)
 	for _, cmd := range p.previousCommands {
 		prevMap[cmd.ID] = cmd
 	}
-	
+
 	// Find changed commands
 	for _, newCmd := range newCommands {
 		if prevCmd, exists := prevMap[newCmd.ID]; exists {
 			// Check if text changed
 			if newCmd.Type == PaintText && newCmd.Text != prevCmd.Text {
-				println("[UPDATE] Text changed for", newCmd.ID, "from", prevCmd.Text, "to", newCmd.Text)
 				newCmd.Type = UpdateText // Mark as update
 				updates = append(updates, newCmd)
 			}
 			// Add more change detection as needed
 		}
 	}
-	
+
 	return updates
 }
-

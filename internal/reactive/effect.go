@@ -17,19 +17,19 @@ type Effect struct {
 	fn           func()
 	dependencies map[SignalInterface]uint64 // signal -> version at last run
 	depmu        sync.RWMutex
-	
+
 	// State
-	active       atomic.Bool
-	dirty        atomic.Bool
-	running      atomic.Bool
-	
+	active  atomic.Bool
+	dirty   atomic.Bool
+	running atomic.Bool
+
 	// Cleanup
-	cleanups     []func()
-	cleanupmu    sync.Mutex
-	
+	cleanups  []func()
+	cleanupmu sync.Mutex
+
 	// Options
-	immediate    bool
-	defer_       bool
+	immediate bool
+	defer_    bool
 }
 
 // CreateEffect creates and runs a new effect
@@ -54,15 +54,15 @@ func CreateEffectWithOptions(fn func(), opts EffectOptions) *Effect {
 		immediate:    opts.Immediate,
 		defer_:       opts.Defer,
 	}
-	
+
 	e.active.Store(true)
-	
+
 	if opts.Immediate && !opts.Defer {
 		e.run()
 	} else if opts.Defer {
 		scheduleEffect(e)
 	}
-	
+
 	return e
 }
 
@@ -71,35 +71,29 @@ func (e *Effect) run() {
 	if !e.active.Load() {
 		return
 	}
-	
-	println("[EFFECT] Running effect ID:", e.id)
-	
+
 	// Prevent recursive runs
 	if !e.running.CompareAndSwap(false, true) {
-		println("[EFFECT] Already running, skipping")
 		return
 	}
 	defer e.running.Store(false)
-	
+
 	// Clear dirty flag
 	e.dirty.Store(false)
-	
+
 	// Clear old dependencies
-	oldDeps := len(e.dependencies)
 	e.clearDependencies()
-	println("[EFFECT] Cleared", oldDeps, "old dependencies")
-	
+
 	// Push to effect stack for dependency tracking
 	pushEffect(e)
 	defer popEffect()
-	
+
 	// Run cleanups from previous run
 	e.runCleanups()
-	
+
 	// Execute the effect function
 	e.fn()
-	
-	println("[EFFECT] Effect completed, now tracking", len(e.dependencies), "dependencies")
+
 }
 
 // invalidate marks the effect as needing re-execution
@@ -107,17 +101,17 @@ func (e *Effect) invalidate() {
 	if !e.active.Load() {
 		return
 	}
-	
+
 	if !e.dirty.CompareAndSwap(false, true) {
 		return // Already dirty
 	}
-	
+
 	// If we're in a batch, queue for later
 	if isInBatch() {
 		addPendingEffect(e)
 		return
 	}
-	
+
 	if e.defer_ {
 		scheduleEffect(e)
 	} else {
@@ -148,7 +142,7 @@ func (e *Effect) removeDependency(signal SignalInterface) {
 func (e *Effect) clearDependencies() {
 	e.depmu.Lock()
 	defer e.depmu.Unlock()
-	
+
 	for dep := range e.dependencies {
 		dep.removeObserver(e)
 	}
@@ -168,7 +162,7 @@ func (e *Effect) runCleanups() {
 	cleanups := e.cleanups
 	e.cleanups = nil
 	e.cleanupmu.Unlock()
-	
+
 	for _, cleanup := range cleanups {
 		cleanup()
 	}
@@ -179,7 +173,7 @@ func (e *Effect) Dispose() {
 	if !e.active.CompareAndSwap(true, false) {
 		return // Already disposed
 	}
-	
+
 	e.clearDependencies()
 	e.runCleanups()
 }

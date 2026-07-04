@@ -22,14 +22,14 @@ type Component func() widgets.WidgetImpl
 
 // App represents a Maya application - SIMPLIFIED API
 type App struct {
-	tree         *core.Tree              // Use REAL tree
-	pipeline     *render.Pipeline        // Use REAL pipeline
-	batcher      *reactive.UpdateBatcher // Use REAL batcher
-	container    js.Value
-	ctx          context.Context
-	cancel       context.CancelFunc
-	root         Component        // Root component for re-rendering
-	renderEffect *reactive.Effect // Single effect for re-rendering
+	tree           *core.Tree              // Use REAL tree
+	pipeline       *render.Pipeline        // Use REAL pipeline
+	batcher        *reactive.UpdateBatcher // Use REAL batcher
+	container      js.Value
+	ctx            context.Context
+	cancel         context.CancelFunc
+	root           Component                       // Root component for re-rendering
+	renderEffect   *reactive.Effect                // Single effect for re-rendering
 	widgetElements map[widgets.WidgetImpl]js.Value // Direct widget->DOM mapping for fine-grained updates
 }
 
@@ -38,11 +38,11 @@ func New(root Component) *App {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	app := &App{
-		tree:    core.NewTree(),
-		batcher: reactive.NewUpdateBatcher(),
-		ctx:     ctx,
-		cancel:  cancel,
-		root:    root,
+		tree:           core.NewTree(),
+		batcher:        reactive.NewUpdateBatcher(),
+		ctx:            ctx,
+		cancel:         cancel,
+		root:           root,
 		widgetElements: make(map[widgets.WidgetImpl]js.Value),
 	}
 
@@ -73,13 +73,13 @@ func (app *App) Run() {
 		}
 
 		app.container = container
-		
+
 		// Determine renderer type from window.MAYA_RENDERER
 		rendererType := "dom" // default
 		if rt := js.Global().Get("window").Get("MAYA_RENDERER"); !rt.IsUndefined() {
 			rendererType = rt.String()
 		}
-		
+
 		// Create appropriate renderer
 		var renderer render.Renderer
 		switch rendererType {
@@ -88,13 +88,11 @@ func (app *App) Run() {
 		default:
 			renderer = render.NewDOMRenderer()
 		}
-		
+
 		// Initialize renderer with container
 		if err := renderer.Init(container); err != nil {
 			panic(fmt.Sprintf("Failed to initialize renderer: %v", err))
 		}
-		
-		println("[MAYA] Using renderer:", renderer.Name())
 
 		// Create pipeline with our REAL components and selected renderer
 		app.pipeline = render.NewPipeline(app.tree, renderer, &render.Theme{
@@ -117,8 +115,7 @@ func (app *App) Run() {
 
 // updateWidget updates a specific widget in the DOM without recreating everything
 func (app *App) updateWidget(widget widgets.WidgetImpl) {
-	println("[UPDATE-WIDGET] Updating specific widget:", widget.ID())
-	
+
 	// Find the node in the tree
 	var targetNode *core.Node
 	for node := range app.tree.PreOrderDFS() {
@@ -127,11 +124,11 @@ func (app *App) updateWidget(widget widgets.WidgetImpl) {
 			break
 		}
 	}
-	
+
 	if targetNode != nil {
 		// Mark as dirty and run selective update
 		targetNode.MarkDirty(core.LayoutDirty)
-		
+
 		// For now, re-run the full pipeline (can optimize later)
 		if app.pipeline != nil {
 			app.pipeline.Execute(context.Background())
@@ -141,18 +138,13 @@ func (app *App) updateWidget(widget widgets.WidgetImpl) {
 
 // render executes the pipeline with current tree
 func (app *App) render() {
-	println("[RENDER] Starting pipeline execution...")
 	if err := app.pipeline.Execute(app.ctx); err != nil {
-		println("[RENDER] Error:", err.Error())
 	} else {
-		println("[RENDER] Pipeline execution complete")
 	}
 }
 
-
 // widgetToNode converts a widget to a core.Node recursively
 func (app *App) widgetToNode(widget widgets.WidgetImpl) *core.Node {
-	println("[WIDGET->NODE] Converting:", widget.ID())
 	node := core.NewNode(widget.ID(), widget)
 
 	// Handle different widget types
@@ -181,18 +173,16 @@ func (app *App) widgetToNode(widget widgets.WidgetImpl) *core.Node {
 
 // setupReactiveEffect creates the widget tree ONCE and lets widgets handle their own updates
 func (app *App) setupReactiveEffect() {
-	println("[REACTIVE] Building widget tree ONCE...")
-	
+
 	// Build tree ONCE - widgets have their own reactive effects
 	rootWidget := app.root()
 	rootNode := app.widgetToNode(rootWidget)
 	app.tree.SetRoot(rootNode)
-	
+
 	// Initial render
 	app.render()
-	
+
 	// Widgets will update themselves via their own effects
-	println("[REACTIVE] Setup complete - using widget-level reactivity")
 }
 
 // setupViewport configures the viewport
@@ -248,7 +238,7 @@ func StyledContainer(style ContainerStyle, children ...widgets.WidgetImpl) widge
 	if child != nil {
 		c.SetChild(child)
 	}
-	
+
 	// Apply styling
 	if style.Background != nil {
 		c.SetColor(*style.Background)
@@ -262,7 +252,7 @@ func StyledContainer(style ContainerStyle, children ...widgets.WidgetImpl) widge
 	if style.Shadow != nil {
 		c.SetBoxShadow(style.Shadow)
 	}
-	
+
 	return c
 }
 
@@ -278,12 +268,12 @@ type ContainerStyle struct {
 
 // Predefined colors for convenience
 var (
-	ColorWhite   = &core.Color{R: 255, G: 255, B: 255, A: 255}
-	ColorBlack   = &core.Color{R: 0, G: 0, B: 0, A: 255}
-	ColorRed     = &core.Color{R: 255, G: 0, B: 0, A: 255}
-	ColorGreen   = &core.Color{R: 0, G: 255, B: 0, A: 255}
-	ColorBlue    = &core.Color{R: 0, G: 0, B: 255, A: 255}
-	ColorGray    = &core.Color{R: 128, G: 128, B: 128, A: 255}
+	ColorWhite     = &core.Color{R: 255, G: 255, B: 255, A: 255}
+	ColorBlack     = &core.Color{R: 0, G: 0, B: 0, A: 255}
+	ColorRed       = &core.Color{R: 255, G: 0, B: 0, A: 255}
+	ColorGreen     = &core.Color{R: 0, G: 255, B: 0, A: 255}
+	ColorBlue      = &core.Color{R: 0, G: 0, B: 255, A: 255}
+	ColorGray      = &core.Color{R: 128, G: 128, B: 128, A: 255}
 	ColorLightGray = &core.Color{R: 200, G: 200, B: 200, A: 255}
 )
 
@@ -347,63 +337,53 @@ func Computed[T any](compute func() T) *reactive.Computed[T] {
 // TextSignal creates a truly reactive text widget
 func TextSignal[T any](signal *reactive.Signal[T], format func(T) string) widgets.WidgetImpl {
 	id := fmt.Sprintf("reactive-text-%p", signal)
-	
+
 	// Create text widget with initial value (without tracking)
 	initialValue := format(signal.Peek())
 	text := widgets.NewText(id, initialValue)
-	println("[TEXT-SIGNAL] Created widget with initial value:", initialValue)
-	
+
 	// Create effect that updates ONLY this widget's text
 	// This effect will track the signal dependency on first run
-	effect := reactive.CreateEffect(func() {
+	reactive.CreateEffect(func() {
 		// This Get() will register this effect as an observer
 		newValue := format(signal.Get())
-		println("[TEXT-SIGNAL] Effect updating widget text to:", newValue)
 		text.SetText(newValue)
-		
+
 		// Mark this specific widget for repaint
 		text.MarkNeedsRepaint()
-		
+
 		// Schedule selective DOM update
 		if globalApp != nil && globalApp.batcher != nil {
 			globalApp.batcher.Add(func() {
-				println("[TEXT-SIGNAL] Batched DOM update for:", id)
 				globalApp.updateWidget(text)
 			})
 		}
 	})
-	
-	println("[TEXT-SIGNAL] Effect created with ID:", effect)
-	
+
 	return text
 }
 
 // TextMemo creates a reactive text widget from a computed value
 func TextMemo[T any](memo *reactive.Memo[T], format func(T) string) widgets.WidgetImpl {
 	id := fmt.Sprintf("reactive-memo-%p", memo)
-	
+
 	// Create text widget with initial value
 	initialValue := format(memo.Peek())
 	text := widgets.NewText(id, initialValue)
-	println("[TEXT-MEMO] Created widget with initial value:", initialValue)
-	
+
 	// Create effect that updates when memo changes
-	effect := reactive.CreateEffect(func() {
+	reactive.CreateEffect(func() {
 		newValue := format(memo.Get())
-		println("[TEXT-MEMO] Memo updated widget text to:", newValue)
 		text.SetText(newValue)
 		text.MarkNeedsRepaint()
-		
+
 		// Schedule selective DOM update
 		if globalApp != nil && globalApp.batcher != nil {
 			globalApp.batcher.Add(func() {
-				println("[TEXT-MEMO] Batched DOM update for:", id)
 				globalApp.updateWidget(text)
 			})
 		}
 	})
-	
-	println("[TEXT-MEMO] Effect created with ID:", effect)
-	
+
 	return text
 }

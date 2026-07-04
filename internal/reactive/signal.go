@@ -1,23 +1,22 @@
 package reactive
 
 import (
-	"fmt"
 	"sync"
 	"sync/atomic"
 )
 
 // Signal represents a reactive value that can be observed for changes
 type Signal[T any] struct {
-	value    T
-	version  atomic.Uint64
-	mu       sync.RWMutex
-	
+	value   T
+	version atomic.Uint64
+	mu      sync.RWMutex
+
 	// Tracking
 	observers map[uint64]*Effect
 	obsmu     sync.RWMutex
-	
+
 	// Equality checker for optimization
-	equals    func(a, b T) bool
+	equals func(a, b T) bool
 }
 
 // NewSignal creates a new signal with an initial value
@@ -27,7 +26,7 @@ func NewSignal[T any](initial T) *Signal[T] {
 		observers: make(map[uint64]*Effect),
 		equals:    nil, // Default to always update
 	}
-	
+
 	// Add default equality check for comparable types
 	switch any(initial).(type) {
 	case bool:
@@ -49,7 +48,7 @@ func NewSignal[T any](initial T) *Signal[T] {
 			return aOk && bOk && aStr == bStr
 		}
 	}
-	
+
 	return s
 }
 
@@ -64,11 +63,10 @@ func NewSignalWithEquals[T any](initial T, equals func(a, b T) bool) *Signal[T] 
 func (s *Signal[T]) Get() T {
 	// Track this signal as a dependency of the current effect
 	if current := getCurrentEffect(); current != nil {
-		println("[SIGNAL] Tracking read by effect ID:", current.id)
 		s.addObserver(current)
 		current.addDependency(s)
 	}
-	
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.value
@@ -84,28 +82,23 @@ func (s *Signal[T]) Peek() T {
 // Set updates the signal value and notifies observers
 func (s *Signal[T]) Set(value T) {
 	s.mu.Lock()
-	
+
 	// Check if value actually changed
 	if s.equals != nil && s.equals(s.value, value) {
 		s.mu.Unlock()
 		return
 	}
-	
-	oldValue := s.value
+
 	s.value = value
 	s.version.Add(1)
 	s.mu.Unlock()
-	
-	println("[SIGNAL] Value changed from", fmt.Sprint(oldValue), "to", fmt.Sprint(value))
-	
+
 	// Check if we're in a batch
 	if isInBatch() {
-		println("[SIGNAL] In batch, queuing notification")
 		addPendingSignal(s)
 		return
 	}
-	
-	println("[SIGNAL] Notifying", len(s.getObservers()), "observers")
+
 	s.notify()
 }
 
@@ -122,7 +115,7 @@ func (s *Signal[T]) Subscribe(callback func(T)) func() {
 	effect := CreateEffect(func() {
 		callback(s.Get())
 	})
-	
+
 	// Return unsubscribe function
 	return func() {
 		effect.Dispose()
@@ -155,14 +148,14 @@ func (s *Signal[T]) notify() {
 		addPendingSignal(s)
 		return
 	}
-	
+
 	s.obsmu.RLock()
 	observers := make([]*Effect, 0, len(s.observers))
 	for _, obs := range s.observers {
 		observers = append(observers, obs)
 	}
 	s.obsmu.RUnlock()
-	
+
 	// Notify outside of lock to prevent deadlocks
 	for _, obs := range observers {
 		obs.invalidate()
@@ -173,7 +166,7 @@ func (s *Signal[T]) notify() {
 func (s *Signal[T]) getObservers() []*Effect {
 	s.obsmu.RLock()
 	defer s.obsmu.RUnlock()
-	
+
 	observers := make([]*Effect, 0, len(s.observers))
 	for _, obs := range s.observers {
 		observers = append(observers, obs)
@@ -185,7 +178,7 @@ func (s *Signal[T]) getObservers() []*Effect {
 func (s *Signal[T]) Dispose() {
 	s.obsmu.Lock()
 	defer s.obsmu.Unlock()
-	
+
 	// Clear all observers
 	for _, obs := range s.observers {
 		obs.removeDependency(s)

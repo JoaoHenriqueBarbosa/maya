@@ -6,6 +6,7 @@
 [![Go 1.24](https://img.shields.io/badge/Go-1.24-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![WebAssembly](https://img.shields.io/badge/target-WASM-654FF0?logo=webassembly&logoColor=white)](https://webassembly.org/)
 [![Dependencies](https://img.shields.io/badge/dependencies-none%20(stdlib%20only)-brightgreen.svg)](go.mod)
+[![Tests](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JoaoHenriqueBarbosa/maya/main/.github/badges/tests.json)](internal)
 [![Lines of code](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JoaoHenriqueBarbosa/maya/main/.github/badges/loc.json)](internal)
 
 > **What this is: a completed experiment with a conclusion.** Maya asked one concrete
@@ -64,10 +65,9 @@ maya.TextSignal(counter, func(v int) string { return fmt.Sprintf("%d", v) })
   reactive bindings `TextSignal` / `TextMemo`.
 - **Zero external dependencies** — standard library only. Nothing to audit in `go.sum`
   (there is no `go.sum`).
-- **Measured, not guessed** — the reactive core and widgets ship with a unit-test suite and
-  microbenchmarks (tree traversal, signals, memos, effects, batching). The benchmarks are the
+- **Measured, not guessed** — the reactive core and widgets ship with a passing unit-test suite
+  and microbenchmarks (tree traversal, signals, memos, effects, batching). The benchmarks are the
   point: they are what turned "Go feels wrong for this" into a measured engineering conclusion.
-  (Note: the suite does not currently pass on `main` — see [Honest status](#honest-status).)
 
 ## Requirements
 
@@ -223,11 +223,9 @@ This repository is a **spike**, and it's worth being upfront about what that mea
 
 - **It was built in a single day** and is **not under active development**. Treat it as a
   reference/experiment, not a dependency.
-- **The test suite does not currently pass on `main`.** At least `TestContainer_Build` (widgets)
-  and one benchmark are broken. Fixing the suite is a great entry point for contributors.
-- **There is debug output in production code.** The reactive core and the public bindings print
-  diagnostic lines (`[SIGNAL] ...`, `[EFFECT] ...`, `[TEXT-SIGNAL] ...`) via `println`/`fmt`.
-  This is noise that belongs behind a logging flag or removed entirely.
+- **The test suite passes** (`go test ./internal/...`) and the production code is free of the
+  debug `println` output the spike was left with. This is a clean stopping point, not a polished
+  product.
 - **Some pieces are stubbed or rough** — e.g. parts of the `Memo` integration with the effect
   interface, and the app-level "selective" update currently falls back to a full pipeline pass
   in places despite the DOM renderer supporting true selective updates.
@@ -274,8 +272,8 @@ Maya is one data point that arrives at that conclusion the hard way — by build
 
 ## Contributing
 
-Contributions are welcome — especially "make the existing thing solid" work (fixing the failing
-tests, removing debug output, finishing the `Memo`/`Effect` wiring, cleaning up the Makefile).
+Contributions are welcome — especially "make the existing thing solid" work (finishing the
+`Memo`/`Effect` wiring, wiring true selective updates end-to-end, cleaning up the Makefile).
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and the PR workflow, and
 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations.
 
